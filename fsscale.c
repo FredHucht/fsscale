@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995-2001
  *
- * $Id: fsscale.c,v 2.54 2001-07-11 16:22:45+02 fred Exp fred $
+ * $Id: fsscale.c,v 2.55 2002/06/04 10:25:32 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.55  2002/06/04 10:25:32  fred
+ * log() -> ALog()
+ *
  * Revision 2.54  2001-07-11 16:22:45+02  fred
  * Added Title to file names
  *
@@ -172,7 +175,7 @@
  */
 /*#pragma OPTIONS inline+Pow*/
 
-char   *RCSId = "$Id: fsscale.c,v 2.54 2001-07-11 16:22:45+02 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.55 2002/06/04 10:25:32 fred Exp fred $";
 
 /* Note: AIX: Ignore warnings "No function prototype given for 'finite'" See math.h, line 429 */
 
@@ -186,6 +189,8 @@ char   *RCSId = "$Id: fsscale.c,v 2.54 2001-07-11 16:22:45+02 fred Exp fred $";
 #include <signal.h>
 #include <unistd.h>
 #include <time.h>
+
+extern int finite(double);
 
 #ifndef MAX
 # define MAX(a, b) ((a) > (b) ? (a) : (b))
@@ -237,6 +242,7 @@ typedef struct NumParams_ {
   int    LogX, LogY;
   int    AV;
   int    VarType;
+  int    ReduceT;
   int    AutoExp;
   int    FitFak;
   int    Bewert;
@@ -262,14 +268,14 @@ typedef struct NumParams_ {
   double Beta;
   
   double Vardummy, d,
-    Xf,  Tc,  Z,  Lz,  Lc,   X,  Dx,  Lx, LLx,
-    Yf,  Mc,  U,  Du,   Y,  Dy,  Ly, LLy,   M,  Lm;
+    Xf,  Tc,  Z,  Lz,  Lc,   X,  Dx,   Lx,  LLx,  Lsf,  Xs,  Lxs,
+    Yf,  Mc,  U,  Du,   Y,  Dy,  Ly,  LLy,    M,  Lm;
   double VarFactor;
 } NumParams;
 
 enum ActiveNames {
   AOff, Ad,
-  AXf,  ATc, AZ, ALz, ALc,  AX, ADx,  ALx, ALLx,
+  AXf,  ATc, AZ, ALz, ALc,  AX, ADx,  ALx, ALLx, ALsf, AXs, ALxs,
   AYf,  AMc, AU, ADu,  AY, ADy, ALy, ALLy,   AM, ALm,
   ALast
 };
@@ -359,7 +365,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.54 $ (C) Fred Hucht 1995-1998\n"
+	    "$Revision: 2.55 $ (C) Fred Hucht 1995-2002\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
@@ -424,6 +430,7 @@ void Usage(int verbose) {
 	    "  Keys 'n'|'N':       Change exponent ny:     ny -=|+= d (ny   = 1/x)\n"
 	    "  Keys 'b'|'B':       Change exponent beta: beta -=|+= d (beta = y/x)\n"
 	    "  Key  '#':           Toggle L^x, L^y vs. L^1/nu, L^beta/nu\n"
+	    "  Key  '/':           Toggle reduction of temperature (T-Tc <-> T/Tc-1)\n"
 	    "\n"
 	    "  left|right mouse:   Zoom in|out and disable autoscaling\n"
 	    "  middle mouse:       Enable autoscaling (default)\n"
@@ -729,13 +736,16 @@ void Calculate(NumParams *p) {
     double l  = s->L - p->Lc;
     double Lx = p->Xf * Pow(l, p->X + p->Dx * s->D) * PowLog(l, p->Lx) * PowLogLog(l, p->LLx);
     double Ly = p->Yf * Pow(l, p->Y + p->Dy * s->D) * PowLog(l, p->Ly) * PowLogLog(l, p->LLy);
+    double Ls = p->Lsf * Pow(l, p->Xs) * PowLog(l, p->Lxs);
     
     for (j = 0; j < s->N; j++) {
       const Data_t *ds = &s->Data[j];
       Data_t *d  = &s->Data[Lx > 0 ? j : s->N - 1 - j];
       double t = ds->T - p->Tc;
       
-      d->x = Lx * Pow(t, p->Z) * PowLog(t, p->Lz);
+      if (p->ReduceT && p->Tc) t /= p->Tc;
+      
+      d->x = Lx * Pow(t, p->Z) * PowLog(t, p->Lz) + Ls;
       d->y = Ly * Pow(t, p->M) * PowLog(t, p->Lm)
 	* Pow(ds->M - p->Mc, p->U + p->Du * s->D);
       
@@ -1006,6 +1016,7 @@ void WriteTerm(const NumParams *p, GraphParams *g,
   /* * f(L - Lc) */
   if (all || Vars[ax]||CI(ax) || Vars[adx]||CI(adx) || (CI(alc) && alc0)) {
     int times = g->Labi[xy] > 1 || (g->Labi[xy] == 1 && g->Lab[xy][0] != '-');
+    char timesstr[] = " "; /* " * " */
     char text[256], lmlc[80];
     const char *name;
     
@@ -1017,19 +1028,24 @@ void WriteTerm(const NumParams *p, GraphParams *g,
     }
     
     if (Vars[alc] || ((all || CI(alc)) && alc0)) {
-      sprintf(lmlc, "%s(%s#%c%+g#0)",
-	      func ? func : "", name, CI(alc) + '0', -Vars[alc]);
-      sprintf(text, "%s%s", times ? " * " : "", lmlc);
+      if (p->ReduceT && alc == ATc && Vars[alc]) {
+	sprintf(lmlc, "%s(%s/#%c%g#0-1)",
+		func ? func : "", name, CI(alc) + '0', Vars[alc]);
+      } else {
+	sprintf(lmlc, "%s(%s#%c%+g#0)",
+		func ? func : "", name, CI(alc) + '0', -Vars[alc]);
+      }
+      sprintf(text, "%s%s", times ? timesstr : "", lmlc);
       /*charstrP(text, 0, &g->cpos[CI(alc) ? ax : alc]);*/
     } else {
       sprintf(lmlc, func ? "%s(%s)" : "%s%s", func ? func : "", name);
-      sprintf(text, "%s%s", times ? " * " : "", lmlc);
+      sprintf(text, "%s%s", times ? timesstr : "", lmlc);
       /*charstrP(text, 0, &g->cpos[CI(ax) ? alc : ax]);*/
     }
     charstrP(text, 0, &g->cpos[alc]);
     
     g->Labi[xy] += sprintf(g->Lab[xy] + g->Labi[xy], "%s%s%s",
-			   times ? " * " : "",
+			   times ? timesstr : "",
 			   func ? "\\" : "",
 			   lmlc);
     
@@ -1125,6 +1141,16 @@ void DrawMain(const NumParams *p, GraphParams *g) {
   WriteTerm(p, g, "alog", ALc, 0, ALx, AOff, 0);
   /* loglog(L - Lc)^LLx */
   WriteTerm(p, g, "alogalog", ALc, 0, ALLx, AOff, 0);
+  
+  if (g->ShowZero || CI(ALsf) || p->Lsf) {
+    /* + Lsf */
+    sprintf(text, " #%c%+g#0", CI(ALsf) + '0', p->Lsf);
+    charstrC(text);
+    /* (L - Lc)^Xs */
+    WriteTerm(p, g, NULL, ALc, 0, AXs,  AOff,  0);
+    /* log(L - Lc)^Lxs */
+    WriteTerm(p, g, "alog", ALc, 0, ALxs, AOff, 0);
+  }
   
   sprintf(text, "; Y = #%c%s#0", CI(AYf) + '0',
 	  p->Yf < 0.0 ? "-" : CI(AYf) ? "+" : "");
@@ -1778,6 +1804,7 @@ void ProcessQueue(NumParams *p, GraphParams *g) {
       p->Lx = p->Ly = p->Lm = p->Lz = p->LLx = p->LLy = 0;
       p->Dx = p->Dy = p->Du = 0;
       p->Xf = p->Yf = 1.0;
+      p->Lsf = 0; p->Xs = 1; p->Lxs = 0;
       g->Active = p->AutoExp = AOff;
       activei = 0;
       todo  = ReCa;
@@ -1801,7 +1828,7 @@ void ProcessQueue(NumParams *p, GraphParams *g) {
     case 'b': p->Beta+=p->d; INTCHECK(p->Beta);todo= ReCaBN; break;
     case 'B': p->Beta-=p->d; INTCHECK(p->Beta);todo= ReCaBN; break;
     case '#': g->ShowNuBeta ^= 1;            todo = ReMa; break;
-      
+    case '/': p->ReduceT    ^= 1;            todo = ReCa; break;
     case 'r': ReverseVideo(g);               todo = ReWr; break;
     case 'l': g->Lines = (g->Lines + 1) % 3; todo = ReWr; break;
     case 'g': g->Grid ^= 1;                  todo = ReWr; break;
@@ -2219,7 +2246,7 @@ int main(int argc, char *argv[]) {
     {"L", "T", "M", "D"},
     {0.02, 0.01},
     {AOff, Ad,
-     AXf, ATc, AZ, ALz, ALc, AX,       ALx, ALLx,
+     AXf, ATc, AZ, ALz, ALc, AX,       ALx, ALLx, ALsf, AXs, ALxs,
      AYf, AMc, AU,       AY,     ALy, ALLy,   AM, ALm}
   };
   
