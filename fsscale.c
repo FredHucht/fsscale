@@ -2,9 +2,14 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995-2001
  *
- * $Id: fsscale.c,v 2.52 2001/03/07 13:33:29 fred Exp fred $
+ * $Id: fsscale.c,v 2.53 2001-07-11 11:57:11+02 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.53  2001-07-11 11:57:11+02  fred
+ * Added write_dat(), now 'p' also writes a single data file with sets
+ * seperated by double blank lines (loadable by gnuplot and xmgr*).
+ * Removed old method write_dats() which wrote several files.
+ *
  * Revision 2.52  2001/03/07 13:33:29  fred
  * Added 'r'everse video, reset is now 'R'
  *
@@ -164,7 +169,7 @@
  */
 /*#pragma OPTIONS inline+Pow*/
 
-char   *RCSId = "$Id: fsscale.c,v 2.52 2001/03/07 13:33:29 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.53 2001-07-11 11:57:11+02 fred Exp fred $";
 
 /* Note: AIX: Ignore warnings "No function prototype given for 'finite'" See math.h, line 429 */
 
@@ -351,7 +356,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.52 $ (C) Fred Hucht 1995-1998\n"
+	    "$Revision: 2.53 $ (C) Fred Hucht 1995-1998\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
@@ -424,9 +429,9 @@ void Usage(int verbose) {
 	    "  Key 'r':            Reverse all colors\n"
 	    "  Key 'l':            Toggle drawing of lines\n"
 	    "  Key 'g':            Toggle drawing of grid\n"
-	    "  Key 'p':            Write gnuplot-loadable file 'fsscale-PID-L-T-M.gp',\n"
-	    "                       xmgr/xmgrace-loadable file 'fsscale-PID-L-T,M.agr'\n"
-	    "                            and generic data file 'fsscale-PID-L-T,M.dat'\n"
+	    "  Key 'p':            Write gnuplot-loadable file 'fsscale-PID-Title-L-T-M.gp',\n"
+	    "                       xmgr/xmgrace-loadable file 'fsscale-PID-Title-L-T,M.agr'\n"
+	    "                            and generic data file 'fsscale-PID-Title-L-T,M.dat'\n"
 	    "                      Note: Files are deleted on exit (see 'P')\n"
 	    "  Key 'P':            as 'p', but don't delete files on exit\n"
 	    "  Key 's':            Save actual graph to file 'fsscale.gif'\n"
@@ -2235,12 +2240,12 @@ int main(int argc, char *argv[]) {
   
   GetArgs(&P, &G, argc, argv);
   
-  sprintf(G.GPName,   "fsscale-%d-%s-%s-%s.gp", 
-	  getpid(), G.Names[0], G.Names[1], G.Names[2]);
-  sprintf(G.XmgrName, "fsscale-%d-%s-%s-%s.agr", 
-	  getpid(), G.Names[0], G.Names[1], G.Names[2]);
-  sprintf(G.DatName,  "fsscale-%d-%s-%s-%s.dat", 
-	  getpid(), G.Names[0], G.Names[1], G.Names[2]);
+  sprintf(G.GPName,   "fsscale-%d-%s-%s-%s-%s.gp", 
+	  getpid(), G.Title, G.Names[0], G.Names[1], G.Names[2]);
+  sprintf(G.XmgrName, "fsscale-%d-%s-%s-%s-%s.agr", 
+	  getpid(), G.Title, G.Names[0], G.Names[1], G.Names[2]);
+  sprintf(G.DatName,  "fsscale-%d-%s-%s-%s-%s.dat", 
+	  getpid(), G.Title, G.Names[0], G.Names[1], G.Names[2]);
   
   ReadData(&P);
 #if 1
