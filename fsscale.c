@@ -1,9 +1,12 @@
 /*
  * Finite Size scaling (C) Fred Hucht 1995, 1996
  *
- * $Id: fsscale.c,v 2.1 1996/07/19 19:51:58 fred Exp $
+ * $Id: fsscale.c,v 2.2 1996-07-30 11:20:35+02 fred Exp fred $
  *
- * $Log$
+ * $Log: fsscale.c,v $
+ * Revision 2.2  1996-07-30 11:20:35+02  fred
+ * Added Mc
+ *
  *
  */
 #include <X11/Ygl.h>
@@ -72,11 +75,13 @@ int    LogX  = 0;
 int    LogY  = 0;
 double Tc    = 0.0;
 double Mc    = 0.0;
+double Lc    = 0.0;
 double Ny    = 0.0;
 double Beta  = 0.0;
 double ExpX  = 0.0;
 double ExpY  = 0.0;
 double ExpM  = 0.0;
+double ExpZ  = 1.0;
 int    Lines = 1;
 int    Grid  = 0;
 Int32  XSize = 400;
@@ -102,7 +107,7 @@ int    Swh, FontH, FontD;
 char   *Title = "FSScale";
 char   *Progname;
 char   *Font  = "-*-Times-Medium-R-Normal--*-120-*-*-*-*-*-*";
-char   *RCSId = "$Id: fsscale.c,v 2.1 1996/07/19 19:51:58 fred Exp $";
+char   *RCSId = "$Id: fsscale.c,v 2.2 1996-07-30 11:20:35+02 fred Exp fred $";
 
 double exp10(double x) {
   return pow(10.0, x);
@@ -120,7 +125,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.1 $ (C) Fred Hucht 1995, 1996\n"
+	    "$Revision: 2.2 $ (C) Fred Hucht 1995, 1996\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
@@ -131,8 +136,8 @@ void Usage(int verbose) {
 	    /*"  3. Column:         coordinate, normally magnetisation or"
 	      "                     suszeptibility (with -g) M\n"*/
 	    "\n"
-	    "X-Axis is scaled as X = (T - Tc) * L^x              ( x =    1 / ny )\n"
-	    "Y-Axis is scaled as Y = (M - Mc) * L^y * (T - Tc)^m ( y = beta / ny )\n"
+	    "X-Axis is scaled as X = (T - Tc)^z * (L - Lc)^x       ( x =    1 / ny )\n"
+	    "Y-Axis is scaled as Y = (M - Mc)   * L^y * (T - Tc)^m ( y = beta / ny )\n"
 	    /*"Y-Axis is scaled as  M       * L^y  ( y = Beta/Ny or y = -Gamma/Ny )\n"*/
 	    "\n"
 	    "Options are:\n"
@@ -158,6 +163,8 @@ void Usage(int verbose) {
 	    "  Page  up|down:      Change exponent m:       m -=|+= d\n"
 	    "  Keys 't'|'T':       Change Tc:              Tc -=|+= d\n"
 	    "  Keys 'm'|'M':       Change Mc:              Mc -=|+= d\n"
+	    "  Keys 'c'|'C':       Change Lc:              Lc -=|+= d\n"
+	    "  Keys 'z'|'Z':       Change exponent z:       z -=|+= d\n"
 	    "  Keys 'n'|'N':       Change exponent ny:     ny -=|+= d\n"
 	    "  Keys 'b'|'B':       Change exponent beta: beta -=|+= d\n"
 	    "\n"
@@ -344,12 +351,12 @@ void Calculate(void) {
 
   for(i = 0; i < S; i++) if(Set[i].active) {
     Set_t *s  = &Set[i];
-    double Lx = pow(s->L, ExpX);
-    double Ly = pow(s->L, ExpY);
+    double Lx = pow(s->L - Lc, ExpX);
+    double Ly = pow(s->L,      ExpY);
     
     for(j = 0; j < s->N; j++) {
       Data_t *d = &s->Data[j];
-      double x  = d->x[0] = (d->T - Tc) * Lx;
+      double x  = d->x[0] = pow(d->T - Tc, ExpZ) * Lx;
       double y  = d->x[1] = (d->M - Mc) * Ly * pow(d->T - Tc, ExpM);
       
       d->lx[0] = (x > 0.0) ? log10(x) : 0.0;
@@ -586,7 +593,7 @@ void charstrH(char * text, int h) {
 
 void Draw(void) {
   int i, j;
-  char tmtc[80], mmmc[80], text[256];
+  char lmlc[80], tmtc[80], mmmc[80], text[256];
   double x, y;
   struct Ticks_ tx, ty;
   double dxmin, dxmax, dymin, dymax;
@@ -600,6 +607,9 @@ void Draw(void) {
   /*sprintf(text, "d = %g, Tc = %g, Ny = %g, %s = %g, X = %g, Y = %g",
     Delta, Tc, Ny, BetaName, BetaFak * Beta, ExpX, ExpY);*/
   
+  if(Lc) sprintf(lmlc, "(%s%+g)", Names[0], -Lc);
+  else   sprintf(lmlc, "%s",      Names[0]);
+  
   if(Tc) sprintf(tmtc, "(%s%+g)", Names[1], -Tc);
   else   sprintf(tmtc, "%s",      Names[1]);
   
@@ -607,8 +617,11 @@ void Draw(void) {
   else   sprintf(mmmc, "%s",      Names[2]);
   
   sprintf(text, "d = %g; X = %s", Delta, tmtc); charstr (text);
-  if(ExpX) {
-    sprintf(text, " * %s", Names[0]); charstr (text);
+  if(ExpZ != 1.0) {
+    sprintf(text, "%g",  ExpZ);       charstrH(text, FontH/2);
+  }
+  if(ExpX || Lc) {
+    sprintf(text, " * %s", lmlc);     charstr (text);
     if(fabs(ExpX - 1.0) > 1e-8) {
       sprintf(text, "%g",  ExpX);     charstrH(text, FontH/2);
     }
@@ -629,7 +642,7 @@ void Draw(void) {
   
   cmov2(FRAME, FontH + FontD);
   sprintf(text, "%s = ", Names[0]); charstr(text);
-
+  
   winset(PlotW);
   
   if(AutoScale) {
@@ -1002,11 +1015,15 @@ void ProcessQueue(void) {
     } else switch(val) {
     case 'a': AutoScale = 1;               rd = 1; break;
     case 'A': AutoScale = 0;                       break;
-    case 'r': ExpX = ExpY = ExpM = Tc = Mc = 0; XY = 1; break;
+    case 'r': ExpX = ExpY = ExpM = Lc = Tc = Mc = 0; ExpZ = XY = 1; break;
+    case 'c': Lc   += Delta; ZCHECK(Lc  ); rc = 1; break;
+    case 'C': Lc   -= Delta; ZCHECK(Lc  ); rc = 1; break;
     case 't': Tc   += Delta; ZCHECK(Tc  ); rc = 1; break;
     case 'T': Tc   -= Delta; ZCHECK(Tc  ); rc = 1; break;
     case 'm': Mc   += Delta; ZCHECK(Mc  ); rc = 1; break;
     case 'M': Mc   -= Delta; ZCHECK(Mc  ); rc = 1; break;
+    case 'z': ExpZ += Delta; ZCHECK(ExpZ); rc = 1; break;
+    case 'Z': ExpZ -= Delta; ZCHECK(ExpZ); rc = 1; break;
 #if 0
     case 'x': ExpX += Delta; ZCHECK(ExpX); XY = 1; break;
     case 'X': ExpX -= Delta; ZCHECK(ExpX); XY = 1; break;
