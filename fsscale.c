@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995-1998
  *
- * $Id: fsscale.c,v 2.41 2000/01/11 15:47:53 fred Exp fred $
+ * $Id: fsscale.c,v 2.42 2000-05-18 19:05:08+02 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.42  2000-05-18 19:05:08+02  fred
+ * Added key '#'
+ *
  * Revision 2.41  2000/01/11 15:47:53  fred
  * Added finite() to checked_v2d
  *
@@ -131,7 +134,7 @@
  */
 /*#pragma OPTIONS inline+Pow*/
 
-char   *RCSId = "$Id: fsscale.c,v 2.41 2000/01/11 15:47:53 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.42 2000-05-18 19:05:08+02 fred Exp fred $";
 
 #include <X11/Ygl.h>
 #include <stdio.h>
@@ -311,7 +314,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.41 $ (C) Fred Hucht 1995-1998\n"
+	    "$Revision: 2.42 $ (C) Fred Hucht 1995-1998\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
@@ -384,7 +387,8 @@ void Usage(int verbose) {
 	    "  Key 'l':            Toggle drawing of lines\n"
 	    "  Key 'g':            Toggle drawing of grid\n"
 	    "  Key 'p':            Write gnuplot-loadable file 'fsscale-PID-T,M.gp'\n"
-	    "                      and xmgr-loadable file 'fsscale-PID-T,M.xmgr'\n"
+	    "                      and xmgr/xmgrace-loadable file 'fsscale-PID-T,M.xmgr'\n"
+	    "                      Note: Files are deleted on exit (see 'P')\n"
 	    "  Key 'P':            as 'p', but don't delete datafiles on exit\n"
 	    "  Key 's':            Save actual graph to file 'fsscale.gif'\n"
 	    "  Key 'v':            Toggle drawing of variance function\n"
@@ -994,7 +998,8 @@ void WriteTerm(const NumParams *p, GraphParams *g,
 	  sprintf(text, "#%c%g#0", CI(ax) + '0', Vars[ax]);
 	}
 	charstrP(text, g->FontH/2, &g->cpos[ax]);
-	g->Labi[xy] += sprintf(g->Lab[xy] + g->Labi[xy], "\\S%g\\N", Vars[ax]);
+	/*g->Labi[xy] += sprintf(g->Lab[xy] + g->Labi[xy], "\\S%g\\N", Vars[ax]);*/
+	g->Labi[xy] += sprintf(g->Lab[xy] + g->Labi[xy], "\\S%s\\N", text);
       }
       break;
     case 1: /* Dx */
