@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995-1998
  *
- * $Id: fsscale.c,v 2.35 1998-02-27 21:28:51+01 fred Exp fred $
+ * $Id: fsscale.c,v 2.36 1998-02-28 01:06:51+01 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.36  1998-02-28 01:06:51+01  fred
+ * Removed all global variables for performance reasons
+ *
  * Revision 2.35  1998-02-27 21:28:51+01  fred
  * Removed LVar, LFit stuff
  *
@@ -110,7 +113,7 @@
  *
  */
 
-char   *RCSId = "$Id: fsscale.c,v 2.35 1998-02-27 21:28:51+01 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.36 1998-02-28 01:06:51+01 fred Exp fred $";
 
 #include <X11/Ygl.h>
 #include <stdio.h>
@@ -281,7 +284,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.35 $ (C) Fred Hucht 1995-1998\n"
+	    "$Revision: 2.36 $ (C) Fred Hucht 1995-1998\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
@@ -752,23 +755,21 @@ double Valuate(NumParams *p) {
 void DrawTickX(const NumParams *p, const GraphParams *g, double x, int level) {
   double len = g->LevelLen[level];
   if (g->Grid && level == 0) {
-    setlinestyle(1);
     move2(x, p->OYmin); draw2(x, p->OYmax);
-    setlinestyle(0);
+  } else {
+    move2(x, p->OYmin); draw2(x, p->OYmin + len * (p->OYmax - p->OYmin));
+    move2(x, p->OYmax); draw2(x, p->OYmax - len * (p->OYmax - p->OYmin));
   }
-  move2(x, p->OYmin); draw2(x, p->OYmin + len * (p->OYmax - p->OYmin));
-  move2(x, p->OYmax); draw2(x, p->OYmax - len * (p->OYmax - p->OYmin));
 }
 
 void DrawTickY(const NumParams *p, const GraphParams *g, double y, int level) {
   double len = g->LevelLen[level];
   if (g->Grid && level == 0) {
-    setlinestyle(1);
     move2(p->OXmin, y); draw2(p->OXmax, y);
-    setlinestyle(0);
+  } else {
+    move2(p->OXmin, y); draw2(p->OXmin + len * (p->OXmax - p->OXmin), y);
+    move2(p->OXmax, y); draw2(p->OXmax - len * (p->OXmax - p->OXmin), y);
   }
-  move2(p->OXmin, y); draw2(p->OXmin + len * (p->OXmax - p->OXmin), y);
-  move2(p->OXmax, y); draw2(p->OXmax - len * (p->OXmax - p->OXmin), y);
 }
 
 int bgnenddraw(int bgn) {
