@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995-2002
  *
- * $Id: fsscale.c,v 2.67 2003-03-14 23:00:42+01 fred Exp fred $
+ * $Id: fsscale.c,v 2.68 2004-05-18 12:20:28+02 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.68  2004-05-18 12:20:28+02  fred
+ * Added Write/Read of active (shown) data sets
+ *
  * Revision 2.67  2003-03-14 23:00:42+01  fred
  * Added AZs, AUs
  *
@@ -214,7 +217,7 @@
  */
 /*#pragma OPTIONS inline+Pow*/
 
-char   *RCSId = "$Id: fsscale.c,v 2.67 2003-03-14 23:00:42+01 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.68 2004-05-18 12:20:28+02 fred Exp fred $";
 
 /* Note: AIX: Ignore warnings "No function prototype given for 'finite'"
  * From math.h:
@@ -314,13 +317,13 @@ typedef struct NumParams_ {
   double VarFactor;
   int    L0_only_in_log;
   double Vardummy,
-    /**/d, L0, Xf, Tc, Z, Lz, Lc, X, Dx, Lx, LLx, Lxsf, Zs, Xs, Lxs, Yf, Mc, U, Du, Y, Dy, Ly, LLy, M, Lm, Lysf, Us, Ys, Lys;
+    /**/d, L0, Xf, Tc, Z, Lz, Lc, X, DX, Lx, LLx, Lxsf, Zs, Xs, DXs, Lxs, Yf, Mc, U, DU, Y, DY, Ly, LLy, M, Lm, Lysf, Us, Ys, DYs, Lys;
   double ReduceT; /* Must be behind Vars for Read/WriteParams */
 } NumParams;
 enum ActiveNames {
 #define ActiveDefaults /* see start of main() */ \
- {AOff,Ad,AL0,AXf,ATc,AZ,ALz,ALc,AX,    ALx,ALLx,ALxsf,AZs,AXs,ALxs,AYf,AMc,AU,    AY,    ALy,ALLy,AM,ALm,ALysf,AUs,AYs,ALys}
-  AOff,Ad,AL0,AXf,ATc,AZ,ALz,ALc,AX,ADx,ALx,ALLx,ALxsf,AZs,AXs,ALxs,AYf,AMc,AU,ADu,AY,ADy,ALy,ALLy,AM,ALm,ALysf,AUs,AYs,ALys,
+ {AOff,Ad,AL0,AXf,ATc,AZ,ALz,ALc,AX,    ALx,ALLx,ALxsf,AZs,AXs,     ALxs,AYf,AMc,AU,    AY,    ALy,ALLy,AM,ALm,ALysf,AUs,AYs,     ALys}
+  AOff,Ad,AL0,AXf,ATc,AZ,ALz,ALc,AX,ADX,ALx,ALLx,ALxsf,AZs,AXs,ADXs,ALxs,AYf,AMc,AU,ADU,AY,ADY,ALy,ALLy,AM,ALm,ALysf,AUs,AYs,ADYs,ALys,
   ALast
 };
 
@@ -336,19 +339,20 @@ struct Defaults_ {
 		"Lz",  0,
 		"Lc",  0,
 		"X",   0,
-		"Dx",  0,
+		"DX",  0,
 		"Lx",  0,
 		"LLx", 0,
-		"Lxsf", 0,
+		"Lxsf",0,
 		"Zs",  0,
 		"Xs",  0,
+		"DXs", 0,
 		"Lxs", 0,
 		"Yf",  1,
 		"Mc",  0,
 		"U",   1,
-		"Du",  0,
+		"DU",  0,
 		"Y",   0,
-		"Dy",  0,
+		"DY",  0,
 		"Ly",  0,
 		"LLy", 0,
 		"M",   0,
@@ -356,6 +360,7 @@ struct Defaults_ {
 		"Lysf", 0,
 		"Us",  0,
 		"Ys",  0,
+		"DYs", 0,
 		"Lys", 0,
 		"ReduceT", 0
 };
@@ -579,7 +584,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.67 $ (C) Fred Hucht 1995-2002\n"
+	    "$Revision: 2.68 $ (C) Fred Hucht 1995-2002\n"
 	    "\n"
 	    "%s reads three column data from standard input or from command specified with '-c'.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension L\n"
@@ -1005,10 +1010,10 @@ void Calculate(NumParams *p) {
     } else {
       ll  = s->L / p->L0 - p->Lc;
       l   = p->L0_only_in_log ? s->L - p->Lc : ll;
-      Lx  = p->Xf * Pow(l, p->X + p->Dx * s->D) * PowLog(ll, p->Lx) * PowLogLog(ll, p->LLx);
-      Ly  = p->Yf * Pow(l, p->Y + p->Dy * s->D) * PowLog(ll, p->Ly) * PowLogLog(ll, p->LLy);
-      Lxs = p->Xf * p->Lxsf * Pow(l, p->Xs) * PowLog(ll, p->Lxs);
-      Lys = p->Yf * p->Lysf * Pow(l, p->Ys) * PowLog(ll, p->Lys);
+      Lx  = p->Xf * Pow(l, p->X + p->DX * s->D) * PowLog(ll, p->Lx) * PowLogLog(ll, p->LLx);
+      Ly  = p->Yf * Pow(l, p->Y + p->DY * s->D) * PowLog(ll, p->Ly) * PowLogLog(ll, p->LLy);
+      Lxs = p->Xf * p->Lxsf * Pow(l, p->Xs + p->DXs * s->D) * PowLog(ll, p->Lxs);
+      Lys = p->Yf * p->Lysf * Pow(l, p->Ys + p->DYs * s->D) * PowLog(ll, p->Lys);
     }
     
     for (j = 0; j < s->N; j++) {
@@ -1025,7 +1030,7 @@ void Calculate(NumParams *p) {
       } else {
 	d->x = Lx * Pow(t, p->Z) * PowLog(t, p->Lz) + Lxs * Pow(t, p->Zs);
 	d->y = Ly * Pow(t, p->M) * PowLog(t, p->Lm)
-	  * Pow(m, p->U + p->Du * s->D) + Lys * Pow(m, p->Us);
+	  * Pow(m, p->U + p->DU * s->D) + Lys * Pow(m, p->Us);
       }
       
       if (finite(d->x) && finite(d->y)) {
@@ -1330,10 +1335,10 @@ void WriteTerm(const NumParams *p, GraphParams *g,
 			   func ? "\\" : "",
 			   lmlc);
     
-    /* ^(x + Dy D) */
+    /* ^(x + DY D) */
     switch(2 * (all || Vars[ax]||CI(ax) || CI(alc)) + (Vars[adx]||CI(adx))) {
     case 3: /* Both */
-      sprintf(text, "(#%c%g#%c%+g#0*%s)",
+      sprintf(text, "(#%c%g#%c%+g#0 %s)",
 	      CI(ax ) + '0', Vars[ax],
 	      CI(adx) + '0', Vars[adx],
 	      g->Names[3]);
@@ -1365,8 +1370,8 @@ void WriteTerm(const NumParams *p, GraphParams *g,
 	g->Labi[xy] += sprintf(g->Lab[xy] + g->Labi[xy], "\\S%s\\N", text);
       }
       break;
-    case 1: /* Dx */
-      sprintf(text, "#%c%g#0*%s", CI(adx) + '0', Vars[adx], g->Names[3]);
+    case 1: /* DX */
+      sprintf(text, "#%c%g#0 %s", CI(adx) + '0', Vars[adx], g->Names[3]);
       charstrH(text, g->FontH/2);
       g->Labi[xy] += sprintf(g->Lab[xy] + g->Labi[xy],
 			     "\\S%g %s\\N",
@@ -1431,8 +1436,8 @@ void DrawMain(const NumParams *p, GraphParams *g) {
   WriteTerm(p, g, NULL,  ATc, 1, AZ,  AOff, xy);
   /* log(T - Tc)^Lz */
   WriteTerm(p, g, "alog", ATc, 0, ALz, AOff, xy);
-  /* (L - Lc)^(X + Dx * D) */
-  WriteTerm(p, g, NULL,  ALc, 1, AX,  ADx,  xy);
+  /* (L - Lc)^(X + DX * D) */
+  WriteTerm(p, g, NULL,  ALc, 1, AX,  ADX,  xy);
   /* log(L - Lc)^Lx */
   WriteTerm(p, g, "alog", ALc, 0, ALx, AOff, xy);
   /* loglog(L - Lc)^LLx */
@@ -1445,8 +1450,8 @@ void DrawMain(const NumParams *p, GraphParams *g) {
     g->Labi[0] += sprintf(g->Lab[0] + g->Labi[0], "%+g", p->Lxsf);
     /* (T - Tc)^Zs */
     WriteTerm(p, g, NULL,  ATc, 0, AZs,  AOff, xy);
-    /* (L - Lc)^Xs */
-    WriteTerm(p, g, NULL, ALc, 0, AXs,  AOff,  xy);
+    /* (L - Lc)^(Xs + DXs * D) */
+    WriteTerm(p, g, NULL, ALc, 0, AXs,  ADXs,  xy);
     /* log(L - Lc)^Lxs */
     WriteTerm(p, g, "alog", ALc, 0, ALxs, AOff, xy);
   }
@@ -1467,10 +1472,10 @@ void DrawMain(const NumParams *p, GraphParams *g) {
     g->Labi[1] = sprintf(g->Lab[1], "");
   }
   
-  /* (M - Mc)^(U + Du * D) */
-  WriteTerm(p, g, NULL,  AMc, 1, AU,  ADu,  xy);
-  /* (L - Lc)^(Y + Dy * D) */
-  WriteTerm(p, g, NULL,  ALc, 0, AY,  ADy,  xy);
+  /* (M - Mc)^(U + DU * D) */
+  WriteTerm(p, g, NULL,  AMc, 1, AU,  ADU,  xy);
+  /* (L - Lc)^(Y + DY * D) */
+  WriteTerm(p, g, NULL,  ALc, 0, AY,  ADY,  xy);
   /* log(L - Lc)^Ly */
   WriteTerm(p, g, "alog", ALc, 0, ALy, AOff, xy);
   /* loglog(L - Lc)^LLy */
@@ -1487,8 +1492,8 @@ void DrawMain(const NumParams *p, GraphParams *g) {
     g->Labi[1] += sprintf(g->Lab[1] + g->Labi[1], "%+g", p->Lysf);
     /* (M - Mc)^Us */
     WriteTerm(p, g, NULL, AMc, 0, AUs,  AOff,  xy);
-    /* (L - Lc)^Ys */
-    WriteTerm(p, g, NULL, ALc, 0, AYs,  AOff,  xy);
+    /* (L - Lc)^(Ys + DYs * D) */
+    WriteTerm(p, g, NULL, ALc, 0, AYs,  ADYs,  xy);
     /* log(L - Lc)^Lys */
     WriteTerm(p, g, "alog", ALc, 0, ALys, AOff, xy);
   }
