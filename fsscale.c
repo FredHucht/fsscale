@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995-1998
  *
- * $Id: fsscale.c,v 2.39 1998-06-04 15:29:06+02 fred Exp fred $
+ * $Id: fsscale.c,v 2.40 2000-01-04 13:38:20+01 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.40  2000-01-04 13:38:20+01  fred
+ * Added variance prefactor ('f'/'F')
+ *
  * Revision 2.39  1998-06-04 15:29:06+02  fred
  * Mouse control in formula/datasets, own pow(), loglog(), ...
  *
@@ -125,7 +128,7 @@
  */
 /*#pragma OPTIONS inline+Pow*/
 
-char   *RCSId = "$Id: fsscale.c,v 2.39 1998-06-04 15:29:06+02 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.40 2000-01-04 13:38:20+01 fred Exp fred $";
 
 #include <X11/Ygl.h>
 #include <stdio.h>
@@ -304,7 +307,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.39 $ (C) Fred Hucht 1995-1998\n"
+	    "$Revision: 2.40 $ (C) Fred Hucht 1995-1998\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
@@ -1065,23 +1068,25 @@ void DrawMain(const NumParams *p, GraphParams *g) {
 }
 
 void checked_v2d(const NumParams *p, double x0, double x1, double dm[2][2]) {
+#if 0 /* now done by finite() */
   if ((p->LogX && (x0 <= 0.0)) ||
       (p->LogY && (x1 <= 0.0))) {
     /* Point is not a number, don't draw */
     bgnenddraw(0);
+  } /* else { */
+#endif
+  double x[2];
+  x[0] = p->LogX ? log10(x0) : x0;
+  x[1] = p->LogY ? log10(x1) : x1;
+  if (!finite(x[0]) || !finite(x[1]) ||
+      x[0] < dm[0][0] || x[0] > dm[0][1] ||
+      x[1] < dm[1][0] || x[1] > dm[1][1]) {
+    /* Point is NaNQ or too far away, don't draw */
+    bgnenddraw(0);
   } else {
-    double x[2];
-    x[0] = p->LogX ? log10(x0) : x0;
-    x[1] = p->LogY ? log10(x1) : x1;
-    if (x[0] < dm[0][0] || x[0] > dm[0][1] ||
-	x[1] < dm[1][0] || x[1] > dm[1][1]) {
-      /* Point is too far away, don't draw */
-      bgnenddraw(0);
-    } else {
-      /* All OK */
-      if (bgnenddraw(1)) v2d(x); /* Draw at least one point */
-      v2d(x);
-    }
+    /* All OK */
+    if (bgnenddraw(1)) v2d(x); /* Draw at least one point */
+    v2d(x);
   }
 }
 
