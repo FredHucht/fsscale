@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995-2001
  *
- * $Id: fsscale.c,v 2.47 2001-02-19 10:44:50+01 fred Exp fred $
+ * $Id: fsscale.c,v 2.48 2001-02-19 10:56:45+01 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.48  2001-02-19 10:56:45+01  fred
+ * draw mean and variance dotted
+ *
  * Revision 2.47  2001-02-19 10:44:50+01  fred
  * Grid now dotted
  *
@@ -149,7 +152,7 @@
  */
 /*#pragma OPTIONS inline+Pow*/
 
-char   *RCSId = "$Id: fsscale.c,v 2.47 2001-02-19 10:44:50+01 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.48 2001-02-19 10:56:45+01 fred Exp fred $";
 
 /* Note: AIX: Ignore warnings "No function prototype given for 'finite'" See math.h, line 429 */
 
@@ -331,7 +334,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.47 $ (C) Fred Hucht 1995-1998\n"
+	    "$Revision: 2.48 $ (C) Fred Hucht 1995-1998\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
@@ -563,7 +566,7 @@ void GraphInit(GraphParams *g) {
 void ReadData(NumParams *p) {
   Set_t *s;
   char buf[10240];
-  double oldL = NODATA;
+  double oldL = NODATA, oldD = NODATA;
   int lineno = 0;
   
   if (p->Set) perror("Set...");
@@ -582,8 +585,9 @@ void ReadData(NumParams *p) {
 #if 0
 	fprintf(stdout, "%lf %lf %lf %lf\n", L, T, M ,D);
 #endif
-	if (L != oldL) { /* New set */
+	if (L != oldL || D != oldD) { /* New set */
 	  oldL      = L;
+	  oldD      = D;
 	  p->S++;
 	  p->Set    = (Set_t*) realloc(p->Set, (p->S+1) * sizeof(Set_t));
 	  s         = &p->Set[p->S];
@@ -608,7 +612,9 @@ void ReadData(NumParams *p) {
       } else if (n > 0) {
 	fprintf(stderr, "%s: Only %d column%s at line %d.\n",
 		p->Progname, n, n == 1 ? "" : "s", lineno);
-      }
+      } /*else if (n == 0) {
+	  oldL = NODATA;
+	  }*/
     }
   }
   p->S++;
@@ -1100,13 +1106,19 @@ void DrawMain(const NumParams *p, GraphParams *g) {
   WriteTerm(p, g, "log", ATc, 0, ALm, AOff, 1);
   
   cmov2(CX = FRAME, CY = g->FontH + g->FontD);
-  sprintf(text, "%s =", g->Names[0]);
+  if (p->NumRows == 3)
+    sprintf(text, "%s =", g->Names[0]);
+  else
+    sprintf(text, "%s/%s =", g->Names[0], g->Names[3]);
   charstrC(text);
   
   for (i = 0; i < p->S; i++) {
     Set_t *s = &p->Set[i];
     color(s->color);
-    sprintf(text, s->active ? " %.4g" : " (%.4g)", s->L);
+    if (p->NumRows == 3)
+      sprintf(text, s->active ? " %.4g" : " (%.4g)", s->L);
+    else
+      sprintf(text, s->active ? " %.4g/%.4g" : " (%.4g/%.4g)", s->L, s->D);
     charstrP(text, 0, &s->cpos);
   }  
   
