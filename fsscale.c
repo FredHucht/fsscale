@@ -2,9 +2,14 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995-1998
  *
- * $Id: fsscale.c,v 2.36 1998-02-28 01:06:51+01 fred Exp fred $
+ * $Id: fsscale.c,v 2.38 1998-03-02 13:19:55+01 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.38  1998-03-02 13:19:55+01  fred
+ * Added mouse support for formula etc.
+ * Added SetMinMax(), WriteTerm(), ChangeActive()
+ * Renamed vars Exp... -> ...
+ *
  * Revision 2.37  1998-03-02 12:10:10+01  fred
  * Re-removed dashed grid (too slow...)
  *
@@ -115,8 +120,9 @@
  *
  *
  */
+/*#pragma OPTIONS inline+Pow*/
 
-char   *RCSId = "$Id: fsscale.c,v 2.36 1998-02-28 01:06:51+01 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.38 1998-03-02 13:19:55+01 fred Exp fred $";
 
 #include <X11/Ygl.h>
 #include <stdio.h>
@@ -152,6 +158,10 @@ typedef struct Data_t_ {
   double x, y;		/* Plot position {x,y} */
 } Data_t;
 
+struct CPos {
+  Screencoord x0, x1, y0, y1;
+};
+
 typedef struct Set_t_ {
   double L;		/* Scaling parameter, normally linear system size */
   double D;		/* Additional scaling parameter column 4 */
@@ -166,7 +176,7 @@ typedef struct Set_t_ {
   char   datfilename[256];
   FILE   *datfile;
 #endif
-  int    cpos[2];
+  struct CPos cpos;
 } Set_t;
 
 typedef struct NumParams_ {
@@ -200,14 +210,14 @@ typedef struct NumParams_ {
   double Beta;
   
   double Vardummy, d,
-    Xf,  Tc,  Z,  Lz,  Lc,   X,  Dx,  Lx,
-    Yf,  Mc,  U,  Du,   Y,  Dy,  Ly,   M,  Lm;
+    Xf,  Tc,  Z,  Lz,  Lc,   X,  Dx,  Lx, LLx,
+    Yf,  Mc,  U,  Du,   Y,  Dy,  Ly, LLy,   M,  Lm;
 } NumParams;
 
 enum ActiveNames {
   AOff, Ad,
-  AXf,  ATc, AZ, ALz, ALc,  AX, ADx, ALx,
-  AYf,  AMc, AU, ADu,  AY, ADy, ALy,  AM, ALm,
+  AXf,  ATc, AZ, ALz, ALc,  AX, ADx,  ALx, ALLx,
+  AYf,  AMc, AU, ADu,  AY, ADy, ALy, ALLy,   AM, ALm,
   ALast
 };
 
@@ -242,9 +252,9 @@ typedef struct GraphParams_ {
   int   Labi[2];
   Int32 MainW, PlotW;
   int   Swh, FontH, FontD;
-  int   ShiftKey, LeftMouse;
+  int   ShiftKey, AltKey, LeftMouse;
   int   ShowVar;
-  int   Acpos[ALast][2];
+  struct CPos cpos[ALast];
   int   ShowZero;
 } GraphParams;
 
@@ -290,7 +300,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.36 $ (C) Fred Hucht 1995-1998\n"
+	    "$Revision: 2.38 $ (C) Fred Hucht 1995-1998\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
@@ -483,6 +493,7 @@ void GraphInit(GraphParams *g) {
     LEFTARROWKEY, RIGHTARROWKEY,
     PAGEUPKEY,    PAGEDOWNKEY,
     LEFTSHIFTKEY, RIGHTSHIFTKEY,
+    LEFTALTKEY,   RIGHTALTKEY,
     LEFTMOUSE,    MIDDLEMOUSE,    RIGHTMOUSE,
     MOUSEX,       MOUSEY,
     PAD1, PAD2, PAD3, PAD4, PAD5, PAD6, PAD7, PAD8, PAD9
@@ -495,11 +506,11 @@ void GraphInit(GraphParams *g) {
   
   g->FontH = getheight();
   g->FontD = getdescender();
-  g->Swh   = 3 * g->FontH + g->FontH/2 + 2;
+  g->Swh   = 4 * g->FontH + 2;
   
   /* Plot window */
-  prefposition(FRAME, g->XSize - FRAME - 1,
-	       g->Swh,   g->YSize - FRAME - 1);
+  prefposition(FRAME,  g->XSize - FRAME - 1,
+	       g->Swh, g->YSize - FRAME - 1);
   g->PlotW = swinopen(g->MainW);
   doublebuffer();
   gconfig();
@@ -580,6 +591,50 @@ void SetMinMax(struct MinMax_ *X, double x, double y) {
   if (x > 0 && y > 0 && x < X->minBp) X->minBp = x;
 }
 
+#if 1
+double Pow(double x, double y) {
+  return
+    y == 0.0 ? 1.0 :
+    y == 1.0 ? x :
+    pow(x, y);
+}
+#else
+double Pow(double x, double y) {
+  if (y == 0.0)
+    return 1.0;
+  else if (y == 1.0)
+    return x;
+  else {
+    int iy = (int)y;
+    double r = 1.0;
+    if (y == (double)iy) {
+      int absy = abs(iy);
+      for (; absy != 0; absy >>= 1) {
+	if (absy & 1) r *= x;
+	x *= x;
+      }
+      return iy >= 0 ? r : 1.0 / r;
+    } else {
+      return pow(x, y);
+    }
+  }
+}
+#endif
+
+double PowLog(double x, double y) {
+  return
+    y == 0.0 ? 1.0 :
+    y == 1.0 ? log(x) :
+    pow(log(x), y);
+}
+
+double PowLogLog(double x, double y) {
+  return
+    y == 0.0 ? 1.0 :
+    y == 1.0 ? log(log(x)) :
+    pow(log(log(x)), y);
+}
+
 void Calculate(NumParams *p) {
   int i, j;
   
@@ -590,17 +645,18 @@ void Calculate(NumParams *p) {
   
   for (i = 0; i < p->S; i++) if (p->Set[i].active) {
     Set_t *s  = &p->Set[i];
-    double Lx = p->Xf * pow(s->L - p->Lc, p->X + p->Dx * s->D) * pow(log(s->L - p->Lc), p->Lx);
-    double Ly = p->Yf * pow(s->L - p->Lc, p->Y + p->Dy * s->D) * pow(log(s->L - p->Lc), p->Ly);
+    double l  = s->L - p->Lc;
+    double Lx = p->Xf * Pow(l, p->X + p->Dx * s->D) * PowLog(l, p->Lx) * PowLogLog(l, p->LLx);
+    double Ly = p->Yf * Pow(l, p->Y + p->Dy * s->D) * PowLog(l, p->Ly) * PowLogLog(l, p->LLy);
     
     for (j = 0; j < s->N; j++) {
       const Data_t *ds = &s->Data[j];
       Data_t *d  = &s->Data[Lx > 0 ? j : s->N - 1 - j];
       double t = ds->T - p->Tc;
       
-      d->x = Lx * pow(t, p->Z) * (p->Lz ? pow(log(t), p->Lz) : 1.0);
-      d->y = Ly * pow(t, p->M) * (p->Lm ? pow(log(t), p->Lm) : 1.0)
-	* pow(ds->M - p->Mc, p->U + p->Du * s->D);
+      d->x = Lx * Pow(t, p->Z) * PowLog(t, p->Lz);
+      d->y = Ly * Pow(t, p->M) * PowLog(t, p->Lm)
+	* Pow(ds->M - p->Mc, p->U + p->Du * s->D);
       
       if (finite(d->x) && finite(d->y)) {
 	SetMinMax(&p->XX, d->x, d->y);
@@ -801,6 +857,8 @@ void CalcTicks(struct Ticks_* t, int Log, double d) {
 #endif
 }
 
+Screencoord CX, CY; /* getcpos is sloow, we don't use it... */
+
 int charstrC(const char *ctext) {
   /* charstr with buildin color sequences
    * returns strwidth of written string */
@@ -823,24 +881,39 @@ int charstrC(const char *ctext) {
   charstr(s); /* Write rest */
   cx += strwidth(s);
   free(text);
+  CX += cx;
   return cx;
 }
 
 int charstrH(const char *text, int h) {
   Screencoord cx, cy, r;
-  getcpos(&cx, &cy);
-  cx -= Gp->XPos; cy -= Gp->YPos;
+  /*getcpos(&cx, &cy); cx -= Gp->XPos; cy -= Gp->YPos;*/
+  cx = CX; cy = CY;
   cmov2i(cx, cy + h);
   r = charstrC(text);
   cmov2i(cx + r, cy);
   return r;
-}    
+}
+
+int charstrP(const char *text, int h, struct CPos* cpos) {
+  Screencoord cx, cy, r;
+  /*getcpos(&cx, &cy); cx -= Gp->XPos; cy -= Gp->YPos;*/
+  cx = CX; cy = CY;
+  cpos->x0 = cx;
+  cpos->y0 = cy + h - Gp->FontD;
+  cmov2i(cx, cy + h);
+  r = charstrC(text);
+  cmov2i(cx + r, cy);
+  cpos->x1 = cx + r;
+  cpos->y1 = cy + h - Gp->FontD + Gp->FontH;
+  return r;
+}
 
 #define CI(a) ((a != AOff) * ((g->Active == (a)) + 2 * (p->AutoExp == (a))))
 
 void WriteTerm(const NumParams *p, GraphParams *g,
 	       const char *func, int alc, int alc0,
-	       int ax, int adx, int xy, int*pos) {
+	       int ax, int adx, int xy) {
   const double *Vars = &p->Vardummy;
   int all = g->ShowZero;
   
@@ -861,16 +934,13 @@ void WriteTerm(const NumParams *p, GraphParams *g,
       sprintf(lmlc, "%s(%s#%c%+g#0)",
 	      func ? func : "", name, CI(alc) + '0', -Vars[alc]);
       sprintf(text, "%s%s", times ? " * " : "", lmlc);
-      g->Acpos[CI(alc) ? ax : alc][0] = *pos;
-      *pos += charstrC(text);
-      g->Acpos[CI(alc) ? ax : alc][1] = *pos;
+      /*charstrP(text, 0, &g->cpos[CI(alc) ? ax : alc]);*/
     } else {
       sprintf(lmlc, func ? "%s(%s)" : "%s%s", func ? func : "", name);
       sprintf(text, "%s%s", times ? " * " : "", lmlc);
-      g->Acpos[CI(ax) ? alc : ax][0] = *pos; /* might be reset below */
-      *pos += charstrC(text);
-      g->Acpos[CI(ax) ? alc : ax][1] = *pos;
+      /*charstrP(text, 0, &g->cpos[CI(ax) ? alc : ax]);*/
     }
+    charstrP(text, 0, &g->cpos[alc]);
     
     g->Labi[xy] += sprintf(g->Lab[xy] + g->Labi[xy], "%s%s%s",
 			   times ? " * " : "",
@@ -884,7 +954,7 @@ void WriteTerm(const NumParams *p, GraphParams *g,
 	      CI(ax ) + '0', Vars[ax],
 	      CI(adx) + '0', Vars[adx],
 	      g->Names[3]);
-      *pos += charstrH(text, g->FontH/2);
+      charstrH(text, g->FontH/2);
       g->Labi[xy] += sprintf(g->Lab[xy] + g->Labi[xy],
 			     "\\S%g%+g %s\\N",
 			     Vars[ax], Vars[adx], g->Names[3]);
@@ -892,15 +962,13 @@ void WriteTerm(const NumParams *p, GraphParams *g,
     case 2: /* X */
       if (all || Vars[ax] != 1.0 || CI(ax)) {
 	sprintf(text, "#%c%g#0", CI(ax) + '0', Vars[ax]);
-	g->Acpos[ax][0] = *pos;
-	*pos += charstrH(text, g->FontH/2);
-	g->Acpos[ax][1] = *pos;
+	charstrP(text, g->FontH/2, &g->cpos[ax]);
 	g->Labi[xy] += sprintf(g->Lab[xy] + g->Labi[xy], "\\S%g\\N", Vars[ax]);
       }
       break;
     case 1: /* Dx */
       sprintf(text, "#%c%g#0*%s", CI(adx) + '0', Vars[adx], g->Names[3]);
-      *pos += charstrH(text, g->FontH/2);
+      charstrH(text, g->FontH/2);
       g->Labi[xy] += sprintf(g->Lab[xy] + g->Labi[xy],
 			     "\\S%g %s\\N",
 			     Vars[adx], g->Names[3]);
@@ -910,80 +978,79 @@ void WriteTerm(const NumParams *p, GraphParams *g,
 }
 
 void DrawMain(const NumParams *p, GraphParams *g) {
-  int i, pos;
+  int i;
   char text[256];
   
   winset(g->MainW);
   color(g->BgColor);
   clear();
   
-  memset(g->Acpos, 0, sizeof(g->Acpos));
+  memset(g->cpos, 0, sizeof(g->cpos));
   
   if (g->Active) {
     sprintf(text, "%d", g->Active);
-    cmov2(g->XSize - FRAME - strwidth(text), 2 * g->FontH + g->FontD);
+    cmov2(CX = g->XSize - FRAME - strwidth(text), CY = g->FontH + g->FontD);
     color(ACOLOR);
     charstrC(text);
   }
   
   if (p->Bewert) {
     sprintf(text, "V%d = %e", p->VarType, p->Error);
-    cmov2(g->XSize - FRAME - strwidth(text), g->FontD);
+    cmov2(CX = g->XSize - FRAME - strwidth(text), CY = g->FontD);
     color(g->Colors[2]);
     charstrC(text);
   }
   
   color(g->FgColor);
-  cmov2(pos = FRAME, 2 * g->FontH + g->FontD);
   
-  
-  sprintf(text, "d = #%c%g#0", CI(Ad) + '0', p->d);
-  
-  g->Acpos[Ad][0] = pos;
-  pos += charstrC(text);
-  g->Acpos[Ad][1] = pos;
+  cmov2(CX = FRAME, CY = 2 * g->FontH + g->FontD);
+  charstrC("d = ");
+  sprintf(text, "#%c%g#0", CI(Ad) + '0', p->d);
+  charstrP(text, 0, &g->cpos[Ad]);
   
   sprintf(text, "; X = #%c%s#0", CI(AXf) + '0',
 	  p->Xf < 0.0 ? "-" : CI(AXf) ? "+" : "");
-  pos += charstrC(text);
+  charstrC(text);
   g->Labi[0] = sprintf(g->Lab[0], "%s", p->Xf == 1.0 ? "" : "-");
   
   /* (T - Tc)^Z */
-  WriteTerm(p, g, NULL,  ATc, 1, AZ,  AOff, 0, &pos);
+  WriteTerm(p, g, NULL,  ATc, 1, AZ,  AOff, 0);
   /* log(T - Tc)^Lz */
-  WriteTerm(p, g, "log", ATc, 0, ALz, AOff, 0, &pos);
+  WriteTerm(p, g, "log", ATc, 0, ALz, AOff, 0);
   /* (L - Lc)^(X + Dx * D) */
-  WriteTerm(p, g, NULL,  ALc, 1, AX,  ADx,  0, &pos);
+  WriteTerm(p, g, NULL,  ALc, 1, AX,  ADx,  0);
   /* log(L - Lc)^Lx */
-  WriteTerm(p, g, "log", ALc, 0, ALx, AOff, 0, &pos);
+  WriteTerm(p, g, "log", ALc, 0, ALx, AOff, 0);
+  /* loglog(L - Lc)^LLx */
+  WriteTerm(p, g, "loglog", ALc, 0, ALLx, AOff, 0);
   
   sprintf(text, "; Y = #%c%s#0", CI(AYf) + '0',
 	  p->Yf < 0.0 ? "-" : CI(AYf) ? "+" : "");
-  pos += charstrC(text);
+  charstrC(text);
   g->Labi[1] = sprintf(g->Lab[1], "%s", p->Yf == 1.0 ? "" : "-");
   
   /* (M - Mc)^(U + Du * D) */
-  WriteTerm(p, g, NULL,  AMc, 1, AU,  ADu,  1, &pos);
+  WriteTerm(p, g, NULL,  AMc, 1, AU,  ADu,  1);
   /* (L - Lc)^(Y + Dy * D) */
-  WriteTerm(p, g, NULL,  ALc, 0, AY,  ADy,  1, &pos);
+  WriteTerm(p, g, NULL,  ALc, 0, AY,  ADy,  1);
   /* log(L - Lc)^Ly */
-  WriteTerm(p, g, "log", ALc, 0, ALy, AOff, 1, &pos);
+  WriteTerm(p, g, "log", ALc, 0, ALy, AOff, 1);
+  /* loglog(L - Lc)^LLy */
+  WriteTerm(p, g, "loglog", ALc, 0, ALLy, AOff, 0);
   /* (T - Tc)^M */
-  WriteTerm(p, g, NULL,  ATc, 0, AM,  AOff, 1, &pos);
+  WriteTerm(p, g, NULL,  ATc, 0, AM,  AOff, 1);
   /* log(T - Tc)^Lm */
-  WriteTerm(p, g, "log", ATc, 0, ALm, AOff, 1, &pos);
+  WriteTerm(p, g, "log", ATc, 0, ALm, AOff, 1);
   
-  
-  cmov2(pos = FRAME, g->FontH + g->FontD);
+  cmov2(CX = FRAME, CY = g->FontH + g->FontD);
   sprintf(text, "%s =", g->Names[0]);
-  pos += charstrC(text);
+  charstrC(text);
+  
   for (i = 0; i < p->S; i++) {
     Set_t *s = &p->Set[i];
-    s->cpos[0] = pos;
     color(s->color);
     sprintf(text, s->active ? " %.4g" : " (%.4g)", s->L);
-    pos += charstrC(text);
-    s->cpos[1] = pos;
+    charstrP(text, 0, &s->cpos);
   }  
   
   sleep(0);
@@ -1097,7 +1164,8 @@ void DrawPlot(NumParams *p) {
     }
     /*fprintf(stderr, "%s (%g)\n", text, x);*/
     color(Gp->FgColor);
-    cmov2(x, p->OYmin); charstr(text);
+    cmov2(x, p->OYmin);
+    charstr(text);
   }
   
   for (y = p->Ticks[1].t0 * floor(p->OYmin / p->Ticks[1].t0);
@@ -1121,7 +1189,8 @@ void DrawPlot(NumParams *p) {
     }
     /*fprintf(stderr, "%s (%g)\n", text, y);*/
     color(Gp->FgColor);
-    cmov2(p->OXmin, y); charstr(text);
+    cmov2(p->OXmin, y);
+    charstr(text);
   }
   
   if (!p->FullFit) {
@@ -1391,6 +1460,10 @@ void ProcessQueue(NumParams *p, GraphParams *g) {
   case RIGHTSHIFTKEY:
     g->ShiftKey = val;
     break;
+  case LEFTALTKEY:
+  case RIGHTALTKEY:
+    g->AltKey = val;
+    break;
   case LEFTMOUSE:
     g->LeftMouse = val;
     break;
@@ -1434,21 +1507,23 @@ void ProcessQueue(NumParams *p, GraphParams *g) {
 	break;
       }
     } else {
+      int i;
       Mmx = mx - g->XPos;
       Mmy = my - g->YPos;
-      switch (Mmy / g->FontH) {
-	int i;
-      case 1:
-	for (i = 0; i < p->S; i++)
-	  if (Mmx >= p->Set[i].cpos[0] && Mmx <= p->Set[i].cpos[1]) {
-	    p->Set[i].active ^= 1;
+      for (i = 0; i < p->S; i++)
+	if (Mmx >= p->Set[i].cpos.x0 && Mmx <= p->Set[i].cpos.x1 &&
+	    Mmy >= p->Set[i].cpos.y0 && Mmy <= p->Set[i].cpos.y1) {
+	  p->Set[i].active ^= 1;
+	  todo = ReCa;
+	  break;
+	}
+      for (i = 0; i < ALast; i++)
+	if (Mmx >= g->cpos[i].x0 && Mmx <= g->cpos[i].x1 &&
+	    Mmy >= g->cpos[i].y0 && Mmy <= g->cpos[i].y1) {
+	  if (g->AltKey) {
+	    p->AutoExp = p->AutoExp == i ? AOff : i;
 	    todo = ReCa;
-	  }
-	break;
-      case 2:
-      case 3:
-	for (i = 0; i < ALast; i++)
-	  if (Mmx >= g->Acpos[i][0] && Mmx <= g->Acpos[i][1]) {
+	  } else {
 	    g->Active = i;
 	    for (activei = g->NumActive - 1;
 		 activei > 0 && g->Active != g->Actives[activei];
@@ -1456,7 +1531,8 @@ void ProcessQueue(NumParams *p, GraphParams *g) {
 	    todo      = ReMa;
 	    rewrite   = 1;
 	  }
-      }
+	  break;
+	}
     }
     break;
   case MIDDLEMOUSE:
@@ -1572,7 +1648,7 @@ void ProcessQueue(NumParams *p, GraphParams *g) {
       p->Tc = p->Tc_o;
       p->Lc = p->Mc = 0;
       p->Z  = p->U = 1;
-      p->Lx = p->Ly = p->Lm = p->Lz = 0;
+      p->Lx = p->Ly = p->Lm = p->Lz = p->LLx = p->LLy = 0;
       p->Dx = p->Dy = p->Du = 0;
       p->Xf = p->Yf = 1.0;
       g->Active = p->AutoExp = AOff;
@@ -1835,9 +1911,9 @@ void write_xmgr(void) {
     Set_t *s  = &Pp->Set[i];
     
     fprintf(xmgrfile, "@ s%d linewidth %d\n",		k, Gp->Lines);
-    fprintf(xmgrfile, "@ s%d color %d\n",		k, i + 1);
-    fprintf(xmgrfile, "@ s%d symbol %d\n",		k, i + 2);
-    fprintf(xmgrfile, "@ s%d symbol color %d\n",	k, i + 1);
+    fprintf(xmgrfile, "@ s%d color %d\n",		k, i % 15 + 1);
+    fprintf(xmgrfile, "@ s%d symbol %d\n",		k, i %  9 + 2);
+    fprintf(xmgrfile, "@ s%d symbol color %d\n",	k, i % 15 + 1);
     fprintf(xmgrfile, "@ s%d symbol size 0.5\n",	k);
     fprintf(xmgrfile, "@ s%d type xy\n",		k);
     fprintf(xmgrfile, "@ s%d comment \" Bla \"\n",	k);
@@ -1974,8 +2050,8 @@ int main(int argc, char *argv[]) {
     {"L", "T", "M", "D"},
     {0.02, 0.01},
     {AOff, Ad,
-     AXf, ATc, AZ, ALz, ALc, AX,      ALx,
-     AYf, AMc, AU,       AY,     ALy,  AM, ALm}
+     AXf, ATc, AZ, ALz, ALc, AX,       ALx, ALLx,
+     AYf, AMc, AU,       AY,     ALy, ALLy,   AM, ALm}
   };
   
   Pp = &P;
@@ -2007,8 +2083,17 @@ int main(int argc, char *argv[]) {
 	  getpid(), G.Names[1], G.Names[2]);
   
   ReadData(&P);
+#if 1
   GraphInit(&G);
   Calculate(&P);
+#else
+  { /* Benchmark */
+    int i, n = atoi(getenv("MAX"));
+    for (i = 0; i < n; i++) 
+      Calculate(&P);
+    exit(0);
+  }
+#endif
   if (P.Bewert) P.Error = Valuate(&P);
   while (1) ProcessQueue(&P, &G);
 }
