@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995, 1996
  *
- * $Id: fsscale.c,v 2.11 1996-11-05 18:44:13+01 fred Exp fred $
+ * $Id: fsscale.c,v 2.12 1996-11-05 18:52:35+01 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.12  1996-11-05 18:52:35+01  fred
+ * 'r' now resets to values given on commandline
+ *
  * Revision 2.11  1996-11-05 18:44:13+01  fred
  * Autoscale now includes variance function
  *
@@ -63,6 +66,8 @@
 #define INTCHECK(var) do { double ivar = floor(var + 0.5); if(fabs(var - ivar) < 1e-10) var = ivar; } while(0)
 
 #define GRAY 8
+#define ACOLOR 9
+
 #define FRAME 	10
 
 typedef struct Data_t_ {
@@ -145,16 +150,29 @@ int    Swh, FontH, FontD;
 char   *Title = "FSScale";
 char   *Progname;
 char   *Font  = "-*-Times-Medium-R-Normal--*-120-*-*-*-*-*-*";
-char   *RCSId = "$Id: fsscale.c,v 2.11 1996-11-05 18:44:13+01 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.12 1996-11-05 18:52:35+01 fred Exp fred $";
+
+#define NUMACTIVE (sizeof(Variables)/sizeof(Variables[0]))
+double dummy = 0.0, *Variables[] = {
+  &dummy,
+  &Tc, &ExpZ,
+  &Lc, &ExpX,
+  &Mc, &ExpU,
+  &ExpY,
+  /*Tc*/ &ExpM
+};
+enum   ActiveNames {AOff, ATc, AZ, ALc, AX, AMc, AU, AY, AM};
+int    Active = AOff, Activei = 0, NumActive = NUMACTIVE;
+int    Actives[] = {0,1,2,3,4,5,6,7,8};
 
 void gnuplot(int);    
 void byebye(int sig);
 
 void byebye(int sig) {
   int i;
-  for (i = 0; i < S; i++) {
+  for(i = 0; i < S; i++) {
     Set_t *s  = &Set[i];
-    if (s->datfilename[0] != 0) remove(s->datfilename);
+    if(s->datfilename[0] != 0) remove(s->datfilename);
   }
   exit(sig);
 }
@@ -167,6 +185,7 @@ void Usage(int verbose) {
   fprintf(stderr, 
 	  "Usage: %s [-h] [-t Tc] [-x x] [-y y] [-m m] [-lx] [-ly]\n"
 	  "               [-N name1,name2,name3] [-T title] [-f font] [-r]\n"
+	  "               [-A i1,... ]\n"
 	  , Progname);
   if(!verbose)
     fprintf(stderr,
@@ -175,7 +194,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.11 $ (C) Fred Hucht 1995, 1996\n"
+	    "$Revision: 2.12 $ (C) Fred Hucht 1995, 1996\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
@@ -195,6 +214,9 @@ void Usage(int verbose) {
 	    "  -x x                Preset Exponent x (default: 1)\n"
 	    "  -y y                Preset Exponent y (default: 1)\n"
 	    "  -m m                Preset Exponent m (default: 1)\n"
+	    "  -A i1,i2,...        Define which variables can be activated using\n"
+	    "                      pad4/pad6 (see below). Use 0,3,6 for Tc,x,y\n"
+	    "                      0:Tc 1:z 2:Lc 3:x 4:Mc 5:u 6:y 7:m\n"
 	    /*"  -n Ny              Preset Ny\n"
 	      "  -b Beta            Preset Beta/Gamma\n"*/
 	    /*"  -g                 Change from Ny/Beta to Ny/Gamma\n"*/
@@ -207,6 +229,13 @@ void Usage(int verbose) {
 	    "  -help               Guess...\n"
 	    "\n"
 	    "Possible actions are:\n"
+	    "  Keys pad4/pad6:     Change active variable. The active variable\n"
+	    "                      is highlighted in the formula and can be changed\n"
+	    "                      with the keypad keys 1,2,3,7,8,9.\n"
+	    "  Keys pad1/pad7:     Change active variable by  10 * d\n"
+	    "  Keys pad2/pad8:     Change active variable by       d\n"
+	    "  Keys pad3/pad9:     Change active variable by 0.1 * d\n"
+	    "\n"
 	    "  Keys '<'|'>':       Change factor   d:       d /=|*= 10\n"
 	    "  Arrow left|right:   Change exponent x:       x -=|+= d\n"
 	    "  Arrow up|down:      Change exponent y:       y -=|+= d\n"
@@ -243,7 +272,7 @@ void GetArgs(int argc, char *argv[]) {
   extern int optind;
   extern char *optarg;
   
-  while((ch = getopt(argc, argv, "ht:x:y:m:l:vN:T:f:r?")) != EOF)
+  while((ch = getopt(argc, argv, "ht:x:y:m:l:vN:T:f:rA:?")) != EOF)
     switch(ch) {
       /*
 	case 'g':
@@ -265,6 +294,15 @@ void GetArgs(int argc, char *argv[]) {
       Names[0] = strtok(optarg, ",");
       Names[1] = strtok(NULL,   ",");
       Names[2] = strtok(NULL,   ",");
+      break;
+    case 'A':
+      {
+	int a = 1; /* El. 0 is dummy */
+	char *s;
+	Actives[a++] = atoi(strtok(optarg, ","));
+	while(s = strtok(NULL, ",")) Actives[a++] = atoi(s);
+	NumActive = a;
+      }
       break;
     case 'T':
       Title = optarg;
@@ -310,7 +348,9 @@ void GraphInit(void) {
     LEFTARROWKEY, RIGHTARROWKEY,
     PAGEUPKEY,    PAGEDOWNKEY,
     LEFTMOUSE,    MIDDLEMOUSE,    RIGHTMOUSE,
-    MOUSEX,       MOUSEY
+    MOUSEX,       MOUSEY,
+    PAD1, PAD2, PAD3, PAD4,
+    PAD6, PAD7, PAD8, PAD9
   };
   
   minsize(XSize, YSize);
@@ -331,6 +371,7 @@ void GraphInit(void) {
   for(i = 0; i < sizeof(Devs)/sizeof(Device); i++) qdevice(Devs[i]);
   tie(LEFTMOUSE, MOUSEX, MOUSEY);
   mapcolor(GRAY, GrayVal, GrayVal, GrayVal);
+  mapcolor(ACOLOR, 64, 255, 64);
   font(1);
 }
 
@@ -671,65 +712,94 @@ void Draw(void) {
   color(BgColor);
   clear();
   
-  color(FgColor);
-  cmov2(FRAME, 2 * FontH + FontD);
-  /*sprintf(text, "d = %g, Tc = %g, Ny = %g, %s = %g, X = %g, Y = %g",
-    Delta, Tc, Ny, BetaName, BetaFak * Beta, ExpX, ExpY);*/
-
   Xlab[0] = Ylab[0] = 0;
   ncx = sprintf(Xlab, "$");
   ncy = sprintf(Ylab, "$");
   
-  if(Lc) sprintf(lmlc, "(%s%+g)", Names[0], -Lc);
-  else   sprintf(lmlc, "%s",      Names[0]);
+  sprintf(lmlc, Lc ? "(%s%+g)" : "%s", Names[0], -Lc);
+  sprintf(tmtc, Tc ? "(%s%+g)" : "%s", Names[1], -Tc);
+  sprintf(mmmc, Mc ? "(%s%+g)" : "%s", Names[2], -Mc);
   
-  if(Tc) sprintf(tmtc, "(%s%+g)", Names[1], -Tc);
-  else   sprintf(tmtc, "%s",      Names[1]);
+  cmov2(FRAME, 2 * FontH + FontD);
+  color(FgColor);
+  sprintf(text, "d = %g; X = ", Delta);
+  charstr (text);
   
-  if(Mc) sprintf(mmmc, "(%s%+g)", Names[2], -Mc);
-  else   sprintf(mmmc, "%s",      Names[2]);
-
-  sprintf(text, "d = %g; X = %s", Delta, tmtc); charstr (text);
+  /* (T - Tc) */
+  color(Active == ATc ? ACOLOR : FgColor);
+  charstr(tmtc);
   ncx += sprintf(Xlab + ncx, "%s", tmtc);
   
-  if(ExpZ != 1.0) {
-    sprintf(text, "%g",  ExpZ);       charstrH(text, FontH/2);
+  /* ^z */
+  if(ExpZ != 1.0 || Active == AZ) {
+    color(Active == AZ ? ACOLOR : FgColor);
+    sprintf(text, "%g",  ExpZ); charstrH(text, FontH/2);
     ncx += sprintf(Xlab + ncx, "^{%g}", ExpZ);
   }
-  if(ExpX || Lc) {
-    sprintf(text, " * %s", lmlc);     charstr (text);
+  
+  /* * (L - Lc) */
+  if(ExpX || Lc || Active == ALc || Active == AX) {
+    color(FgColor); charstr(" * ");
+    color(Active == ALc ? ACOLOR : FgColor);
+    charstr(lmlc);
     ncx += sprintf(Xlab + ncx, " \\cdot %s", lmlc);
-    if(ExpX != 1.0) {
-      sprintf(text, "%g",  ExpX);     charstrH(text, FontH/2);
+    
+    /* ^x */
+    if(ExpX != 1.0 || Active == AX) {
+      color(Active == AX ? ACOLOR : FgColor);
+      sprintf(text, "%g",  ExpX); charstrH(text, FontH/2);
       ncx += sprintf(Xlab + ncx, "^{%g}", ExpX);
     }
   }
-  sprintf(text, "; Y = %s", mmmc);    charstr(text);
+  
+  color(FgColor); charstr("; Y = ");
+  
+  /* (M - Mc) */
+  color(Active == AMc ? ACOLOR : FgColor);
+  charstr(mmmc);
   ncy += sprintf(Ylab + ncy, "%s", mmmc);
-  if(ExpU != 1.0) {
-    sprintf(text, "%g",  ExpU);       charstrH(text, FontH/2);
+  
+  /* ^u */
+  if(ExpU != 1.0 || Active == AU) {
+    color(Active == AU ? ACOLOR : FgColor);
+    sprintf(text, "%g",  ExpU); charstrH(text, FontH/2);
     ncy += sprintf(Ylab + ncy, "^{%g}", ExpU);
   }
-  if(ExpM) {
-    sprintf(text, " * %s", tmtc);     charstr(text);
-    ncy += sprintf(Ylab + ncy, " \\cdot %s", tmtc);
-    if(ExpM != 1.0) {
-      sprintf(text, "%g",  ExpM);     charstrH(text, FontH/2);
-      ncy += sprintf(Ylab + ncy, "^{%g}", ExpM);
-    }
-  }
-  if(ExpY) {
-    sprintf(text, " * %s", Names[0]); charstr (text);
+  
+  /* * L */
+  if(ExpY || Active == AY) {
+    color(FgColor); charstr(" * ");
+    charstr(Names[0]);
     ncy += sprintf(Ylab + ncy, " \\cdot %s", Names[0]);
-    if(ExpY != 1.0) {
-      sprintf(text, "%g",  ExpY);     charstrH(text, FontH/2);
+    
+    /* ^y */
+    if(ExpY != 1.0 || Active == AY) {
+      color(Active == AY ? ACOLOR : FgColor);
+      sprintf(text, "%g",  ExpY); charstrH(text, FontH/2);
       ncy += sprintf(Ylab + ncy, "^{%g}", ExpY);
     }
   }
+  
+  /* * (T - Tc) */
+  if(ExpM || Active == AM) {
+    color(FgColor); charstr(" * ");
+    color(Active == ATc ? ACOLOR : FgColor);
+    charstr(tmtc);
+    ncy += sprintf(Ylab + ncy, " \\cdot %s", tmtc);
+    
+    /* ^m */
+    if(ExpM != 1.0 || Active == AM) {
+      color(Active == AM ? ACOLOR : FgColor);
+      sprintf(text, "%g",  ExpM); charstrH(text, FontH/2);
+      ncy += sprintf(Ylab + ncy, "^{%g}", ExpM);
+    }
+  }
+  
   strcat(Xlab, "$");
   strcat(Ylab, "$");
   
   cmov2(FRAME, FontH + FontD);
+  color(FgColor);
   sprintf(text, "%s = ", Names[0]); charstr(text);
   
   winset(PlotW);
@@ -1018,6 +1088,23 @@ void ProcessQueue(void) {
   printf("%d %d\n", dev, val);
 #endif
   
+  if(dev == KEYBD) {
+    /* Reenable PAD Keys, don't misinterpret them as Number keys */
+    Int32 dev2 = qtest();
+    switch(dev2) {
+    case PAD1:
+    case PAD2:
+    case PAD3:
+    case PAD4:
+    case PAD6:
+    case PAD7:
+    case PAD8:
+    case PAD9:
+      dev = qread(&val);
+      break;
+    }
+  }      
+  
   switch(dev) {
   case INPUTCHANGE:
     if (val == 0) gnuplot(0);
@@ -1094,6 +1181,14 @@ void ProcessQueue(void) {
   case     PAGEUPKEY: if(val) {ExpM += Delta; INTCHECK(ExpM); XY = 1;} break;
   case   PAGEDOWNKEY: if(val) {ExpM -= Delta; INTCHECK(ExpM); XY = 1;} break;
     
+  case PAD4: if(val) {Activei = (Activei + NumActive - 1) % NumActive; Active = Actives[Activei]; rd = 1;} break;
+  case PAD6: if(val) {Activei = (Activei             + 1) % NumActive; Active = Actives[Activei]; rd = 1;} break;
+  case PAD1: if(val) {*Variables[Active] -= 10*Delta; INTCHECK(*Variables[Active]); XY = 1;} break;
+  case PAD2: if(val) {*Variables[Active] -=    Delta; INTCHECK(*Variables[Active]); XY = 1;} break;
+  case PAD3: if(val) {*Variables[Active] -= .1*Delta; INTCHECK(*Variables[Active]); XY = 1;} break;
+  case PAD7: if(val) {*Variables[Active] += 10*Delta; INTCHECK(*Variables[Active]); XY = 1;} break;
+  case PAD8: if(val) {*Variables[Active] +=    Delta; INTCHECK(*Variables[Active]); XY = 1;} break;
+  case PAD9: if(val) {*Variables[Active] += .1*Delta; INTCHECK(*Variables[Active]); XY = 1;} break;
   case KEYBD:
     if(val >= '0' && val <= '9') {
       Int16 val2;
@@ -1142,10 +1237,6 @@ void ProcessQueue(void) {
     case 'y': AutoScale = 1; LogY ^= 1; replot = rd = 1; break;
     case 's': gl2ppm("| ppmtogif > fsscale.gif"); break;
     case 'p': gnuplot(1); break;
-#if 0
-    case '3': AutoScale = 1; LogX = 1; LogY = 0; replot = rd = 1; break;
-    case '4': AutoScale = 1; LogX = 1; LogY = 1; replot = rd = 1; break;
-#endif
     case 'q':
     case '\033':
       byebye(0);
