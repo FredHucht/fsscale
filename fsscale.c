@@ -1,7 +1,7 @@
 /*
  * Finite Size scaling (C) Fred Hucht 1995, 1996
  *
- * $Id: fsscale.c,v 2.0 1996/07/19 18:49:46 fred Exp $
+ * $Id: fsscale.c,v 2.1 1996/07/19 19:49:17 fred Exp fred $
  */
 #include <X11/Ygl.h>
 #include <stdio.h>
@@ -98,7 +98,7 @@ int    Swh, FontH, FontD;
 char   *Title = "FSScale";
 char   *Progname;
 char   *Font  = "-*-Times-Medium-R-Normal--*-120-*-*-*-*-*-*";
-char   *RCSId = "$Id: fsscale.c,v 2.0 1996/07/19 18:49:46 fred Exp $";
+char   *RCSId = "$Id: fsscale.c,v 2.1 1996/07/19 19:49:17 fred Exp fred $";
 
 double exp10(double x) {
   return pow(10.0, x);
@@ -106,18 +106,24 @@ double exp10(double x) {
 
 void Usage(int verbose) {
   fprintf(stderr, 
-	  "Usage: %s [-help] [-t Tc] [-x x] [-y y] [-m m] [-lx] [-ly]\n"
-	  "               [-N name1,name2,name3] [-T title] [-f font] [-r]\n",
-	  Progname);
-  if(verbose)
+	  "Usage: %s [-h] [-t Tc] [-x x] [-y y] [-m m] [-lx] [-ly]\n"
+	  "               [-N name1,name2,name3] [-T title] [-f font] [-r]\n"
+	  , Progname);
+  if(!verbose)
     fprintf(stderr,
-	    "       $Revision: 2.0 $ (C) Fred Hucht 1995, 1996\n"
+	    "Type '%s -h' for long help\n"
+	    , Progname);
+  else
+    fprintf(stderr,
+	    "\n"
+	    "$Revision: 2.1 $ (C) Fred Hucht 1995, 1996\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
 	    "                     of the system L\n"
 	    "  2. Column:         ordinate, normally temperature T\n"
 	    "  3. Column:         coordinate, normally magnetisation M\n"
+	    "NOTE: The data should be sorted with respect to column 1.\n"
 	    /*"  3. Column:         coordinate, normally magnetisation or"
 	      "                     suszeptibility (with -g) M\n"*/
 	    "\n"
@@ -126,28 +132,33 @@ void Usage(int verbose) {
 	    /*"Y-Axis is scaled as  M       * L^y  ( y = Beta/Ny or y = -Gamma/Ny )\n"*/
 	    "\n"
 	    "Options are:\n"
-	    "  -t Tc               Preset Tc\n"
-	    "  -x x                Preset Exponent x\n"
-	    "  -y y                Preset Exponent y\n"
-	    "  -m m                Preset Exponent m\n"
+	    "  -t Tc               Preset Tc         (default: 0)\n"
+	    "  -x x                Preset Exponent x (default: 1)\n"
+	    "  -y y                Preset Exponent y (default: 1)\n"
+	    "  -m m                Preset Exponent m (default: 1)\n"
 	    /*"  -n Ny              Preset Ny\n"
 	      "  -b Beta            Preset Beta/Gamma\n"*/
 	    /*"  -g                 Change from Ny/Beta to Ny/Gamma\n"*/
 	    "  -lx/-ly             Set X/Y-axis to logscale\n"
-	    "  -N n1,n2,n3         Set names for the three columns.\n"
-	    "                      Default is L,T,M\n"
+	    "  -N n1,n2,n3         Set names for the three columns\n"
+	    "                      (default: 'L,T,M')\n"
 	    "  -T title            Set window title\n"
 	    "  -f font             Use font <font>\n"
 	    "  -r                  Use reverse video\n"
 	    "  -help               Guess...\n"
 	    "\n"
 	    "Possible actions are:\n"
-	    "  left/right mouse:   Zoom in/out and disable autoscaling\n"
-	    "  middle mouse:       Enable autoscaling\n"
-	    "  Arrow left/right:   Change exponent x\n"
-	    "  Arrow up/down:      Change exponent y\n"
-	    "  Page  up/down:      Change exponent m\n"
-	    "  Keys 'a'/'A':       Enable/disable autoscaling\n"
+	    "  Keys '<'|'>':       Change factor   d:       d /=|*= 10\n"
+	    "  Arrow left|right:   Change exponent x:       x -=|+= d\n"
+	    "  Arrow up|down:      Change exponent y:       y -=|+= d\n"
+	    "  Page  up|down:      Change exponent m:       m -=|+= d\n"
+	    "  Keys 't'|'T':       Change Tc:              Tc -=|+= d\n"
+	    "  Keys 'n'|'N':       Change exponent ny:     ny -=|+= d\n"
+	    "  Keys 'b'|'B':       Change exponent beta: beta -=|+= d\n"
+	    "\n"
+	    "  middle mouse:       Enable autoscaling (default)\n"
+	    "  left|right mouse:   Zoom in|out and disable autoscaling\n"
+	    "  Keys 'a'|'A':       Enable|disable autoscaling\n"
 	    "  Key 'r':            Reset all values\n"
 	    "  Key 'l':            Toggle drawing of lines\n"
 	    "  Key 'g':            Toggle drawing of grid\n"
@@ -157,11 +168,7 @@ void Usage(int verbose) {
 #endif
 	    "  Key 'x':            Toggle X-axis linear/log scale\n"
 	    "  Key 'y':            Toggle Y-axis linear/log scale\n"
-	    "  Keys 'q'/Esc:       Quit\n"
-	    "  Keys 't'/'T':       Change Tc\n"
-	    "  Keys 'n'/'N':       Change exponent ny\n"
-	    "  Keys 'b'/'B':       Change exponent beta\n"
-	    "  Keys '<'/'>':       Change change-factor d\n"
+	    "  Keys 'q'|Esc:       Quit\n"
 	    "  Keys \"00\"-\"99\":     Activate/deactivate dataset 00-99\n"
 	    , Progname);
   exit(1);
