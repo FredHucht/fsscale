@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995, 1996
  *
- * $Id: fsscale.c,v 2.15 1996-11-11 17:47:15+01 fred Exp fred $
+ * $Id: fsscale.c,v 2.16 1996/11/11 16:50:55 fred Exp michael $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.16  1996/11/11 16:50:55  fred
+ * Failed to read lines with more columns than expected.
+ *
  * Revision 2.15  1996-11-11 17:47:15+01  fred
  * Added log corrections, ExpX, ExpY now may lineary depend on
  * (undocumented) 4th column (use option -4), useful for gap exponents...
@@ -165,7 +168,7 @@ int    Swh, FontH, FontD;
 char   *Title = "FSScale";
 char   *Progname;
 char   *Font  = "-*-Times-Medium-R-Normal--*-120-*-*-*-*-*-*";
-char   *RCSId = "$Id: fsscale.c,v 2.15 1996-11-11 17:47:15+01 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.16 1996/11/11 16:50:55 fred Exp michael $";
 
 #define NUMACTIVE (sizeof(Variables)/sizeof(Variables[0]))
 double dummy = 0.0, *Variables[] = {
@@ -216,7 +219,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.15 $ (C) Fred Hucht 1995, 1996\n"
+	    "$Revision: 2.16 $ (C) Fred Hucht 1995, 1996\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
@@ -1404,7 +1407,7 @@ void ProcessQueue(void) {
 
 void gnuplot(int flag) {
   FILE *gpfile;
-  int i, j;
+  int i, j, first;
   static plotting = 0;
   char *styles[] = { "points", "lines", "linespoints" };
 
@@ -1448,13 +1451,16 @@ void gnuplot(int flag) {
 	  LogY ? exp10(OYmin) : OYmin,
 	  LogY ? exp10(OYmax) : OYmax);
 
+  first = 1;
   for(i = 0; i < S; i++) if(Set[i].active) {
     Set_t *s  = &Set[i];
-    fprintf(gpfile, "'%s' title '%s=%g' %c",
+    fprintf(gpfile, "%c'%s' title '%s=%g' %c",
+	    first ? ' ' : ',',
 	    s->datfilename,
-	    Names[0], s->L,
-	    (i < S - 1) ? ',' : '\n');
+	    Names[0], s->L);
+    first = 0;
   }
+  fprintf(gpfile, "\n");
   fclose(gpfile);
   color(BgColor); rectfi(0,0,2,2); sleep(0);
   return;
