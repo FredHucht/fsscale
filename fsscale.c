@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995-2000
  *
- * $Id: fsscale.c,v 2.44 2000-11-03 10:14:29+01 fred Exp fred $
+ * $Id: fsscale.c,v 2.45 2001-02-14 10:51:58+01 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.45  2001-02-14 10:51:58+01  fred
+ * *** empty log message ***
+ *
  * Revision 2.44  2000-11-03 10:14:29+01  fred
  * *** empty log message ***
  *
@@ -140,7 +143,7 @@
  */
 /*#pragma OPTIONS inline+Pow*/
 
-char   *RCSId = "$Id: fsscale.c,v 2.44 2000-11-03 10:14:29+01 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.45 2001-02-14 10:51:58+01 fred Exp fred $";
 
 /* Note: AIX: Ignore warnings "No function prototype given for 'finite'" See math.h, line 429 */
 
@@ -322,7 +325,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.44 $ (C) Fred Hucht 1995-1998\n"
+	    "$Revision: 2.45 $ (C) Fred Hucht 1995-1998\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
@@ -551,7 +554,7 @@ void GraphInit(GraphParams *g) {
 
 void ReadData(NumParams *p) {
   Set_t *s;
-  char buf[1024];
+  char buf[10240];
   double oldL = NODATA;
   int lineno = 0;
   
