@@ -2,9 +2,13 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995-2002
  *
- * $Id: fsscale.c,v 2.64 2002-12-04 11:26:13+01 fred Exp fred $
+ * $Id: fsscale.c,v 2.65 2002-12-17 15:47:42+01 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.65  2002-12-17 15:47:42+01  fred
+ * New option -c <cmd> (saved in params file, very helpful!), new key '='
+ * sets L0 only in logs, etc.
+ *
  * Revision 2.64  2002-12-04 11:26:13+01  fred
  * Fixed 's'
  *
@@ -204,7 +208,7 @@
  */
 /*#pragma OPTIONS inline+Pow*/
 
-char   *RCSId = "$Id: fsscale.c,v 2.64 2002-12-04 11:26:13+01 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.65 2002-12-17 15:47:42+01 fred Exp fred $";
 
 /* Note: AIX: Ignore warnings "No function prototype given for 'finite'"
  * From math.h:
@@ -552,7 +556,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.64 $ (C) Fred Hucht 1995-2002\n"
+	    "$Revision: 2.65 $ (C) Fred Hucht 1995-2002\n"
 	    "\n"
 	    "%s reads three column data from standard input or from command specified with '-c'.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension L\n"
@@ -685,10 +689,18 @@ void GetArgs(NumParams *p, GraphParams *g, int argc, char *argv[]) {
     case 'm': p->M_o  = p->M  = atof(optarg); break;
     case 'v': p->Bewert = g->ShowVar = 1; break;
     case 'N':
-      strncpy(g->Names[0], strtok(optarg, ","), sizeof(g->Names[0]));
-      strncpy(g->Names[1], strtok(NULL,   ","), sizeof(g->Names[1]));
-      strncpy(g->Names[2], strtok(NULL,   ","), sizeof(g->Names[1]));
-      strncpy(g->Names[3], strtok(NULL,   ","), sizeof(g->Names[1]));
+      ptr = strtok(optarg, ",");
+      if (ptr) strncpy(g->Names[0], ptr, sizeof(g->Names[0]));
+      else     g->Names[0][0] = '\0';
+      ptr = strtok(NULL,   ",");
+      if (ptr) strncpy(g->Names[1], ptr, sizeof(g->Names[1]));
+      else     g->Names[1][0] = '\0';
+      ptr = strtok(NULL,   ",");
+      if (ptr) strncpy(g->Names[2], ptr, sizeof(g->Names[2]));
+      else     g->Names[2][0] = '\0';
+      ptr = strtok(NULL,   ",");
+      if (ptr) strncpy(g->Names[3], ptr, sizeof(g->Names[3]));
+      else     g->Names[3][0] = '\0';
       break;
     case 'A':
       {
