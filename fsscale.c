@@ -2,9 +2,13 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995, 1996
  *
- * $Id: fsscale.c,v 2.24 1997-06-16 18:20:39+02 fred Exp $
+ * $Id: fsscale.c,v 2.25 1998/02/02 13:35:46 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.25  1998/02/02 13:35:46  fred
+ * data now in gnuplot file, rewrote {gnuplot|xmgr}_label(), added
+ * variance of previous parameters (blue line)
+ *
  * Revision 2.24  1997-06-16 18:20:39+02  fred
  * Fixed -A option
  *
@@ -133,6 +137,11 @@ typedef struct Set_t_ {
 #endif
 } Set_t;
 
+struct Ticks_ {
+  double t0, t1;
+  int    l0, l1;
+} Ticks[2];
+
 #ifdef BEWERT
 int    AV = 0;
 double  Mean[ASZ],  Var[2][ASZ][2];
@@ -199,7 +208,7 @@ int    Swh, FontH, FontD;
 char   *Title = "FSScale";
 char   *Progname;
 char   *Font  = "-*-Times-Medium-R-Normal--*-120-*-*-*-*-*-*";
-char   *RCSId = "$Id: fsscale.c,v 2.24 1997-06-16 18:20:39+02 fred Exp $";
+char   *RCSId = "$Id: fsscale.c,v 2.25 1998/02/02 13:35:46 fred Exp fred $";
 char   GPName[256]   = "";
 char   XmgrName[256] = "";
 
@@ -261,7 +270,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.24 $ (C) Fred Hucht 1995-1998\n"
+	    "$Revision: 2.25 $ (C) Fred Hucht 1995-1998\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
@@ -756,11 +765,6 @@ void enddraw(void) {
   }
 }
 
-struct Ticks_ {
-  double t0, t1;
-  int    l0, l1;
-};
-
 void CalcTicks(struct Ticks_* t, int Log, double d) {
   const double x[][2] = {{1.0, 0.1},{2.0, 1.0}, {5.0, 1.0}};
   double l10, fl10;
@@ -777,10 +781,10 @@ void CalcTicks(struct Ticks_* t, int Log, double d) {
       t->l1 = 1;
       t->t1 = log10(x[i][1]) * exp10(fl10);
     }
-    /*if (t->t0 < 1.0) {
-      t->l0 = 1;
-      t->t0 = log10(x[i][0]) * exp10(fl10);
-      }*/
+    /* if (t->t0 < 1.0) {
+       t->l0 = 1;
+       t->t0 = log10(x[i][0]) * exp10(fl10);
+       }*/
   }
 #if 0
   fprintf(stderr, "%g %g %d %d\n",
@@ -827,7 +831,6 @@ void Draw(void) {
   int i, j, ncx, ncy;
   char lmlc[80], tmtc[80], mmmc[80], text[256];
   double x, y;
-  struct Ticks_ tx, ty;
   double dxmin, dxmax, dymin, dymax;
   
   winset(MainW);
@@ -1009,25 +1012,24 @@ void Draw(void) {
   color(GRAY);
   rect(OXmin, OYmin, OXmax, OYmax);
   
-  CalcTicks(&tx, LogX, OXmax - OXmin);
-  CalcTicks(&ty, LogY, OYmax - OYmin);
+  CalcTicks(&Ticks[0], LogX, OXmax - OXmin);
+  CalcTicks(&Ticks[1], LogY, OYmax - OYmin);
   
-  /*tdx = LinearTickD(OXmax - OXmin);
-    tdy = LinearTickD(OYmax - OYmin);*/
-    
-  for (x = tx.t0 * floor(OXmin / tx.t0);
-      x < OXmax;
-      x = tx.l0 ? log10(exp10(x) + exp10(tx.t0)) : x + tx.t0) { 
+  for (x = Ticks[0].t0 * floor(OXmin / Ticks[0].t0);
+       x < OXmax;
+       x = Ticks[0].l0
+	 ? log10(exp10(x) + exp10(Ticks[0].t0))
+	 : x + Ticks[0].t0) { 
     double xx;
-    if (fabs(x / tx.t0) < 1e-10) x = 0.0;
+    if (fabs(x / Ticks[0].t0) < 1e-10) x = 0.0;
     color(GRAY);
-    for (xx = x; xx < x + tx.t0; 
-	xx = tx.l1 ? log10(exp10(xx) + exp10(x)) : xx + tx.t1) { 
+    for (xx = x; xx < x + Ticks[0].t0; 
+	 xx = Ticks[0].l1 ? log10(exp10(xx) + exp10(x)) : xx + Ticks[0].t1) { 
       DrawTickX(xx, 1);
     }
     color(GRAY);
     DrawTickX(x, 0);
-    if (LogX == tx.l0) {
+    if (LogX == Ticks[0].l0) {
       sprintf(text, "%g", x); /*printf(       "%g\n", x);*/
     } else {
       sprintf(text, "%.3g", exp10(x));/*printf(       "%.3g\n", exp10(x));*/
@@ -1036,17 +1038,21 @@ void Draw(void) {
     cmov2(x, OYmin); charstr(text);
   }
   
-  for (y = ty.t0 * floor(OYmin / ty.t0); y < OYmax; y += ty.t0) {
+  for (y = Ticks[1].t0 * floor(OYmin / Ticks[1].t0);
+       y < OYmax;
+       y = Ticks[1].l0
+	 ? log10(exp10(y) + exp10(Ticks[1].t0))
+	 : y + Ticks[1].t0) {
     double yy;
-    if (fabs(y / ty.t0) < 1e-10) y = 0.0;
+    if (fabs(y / Ticks[1].t0) < 1e-10) y = 0.0;
     color(GRAY);
-    for (yy = y; yy < y + ty.t0;
-	yy = ty.l1 ? log10(exp10(yy) + exp10(y)) : yy + ty.t1) { 
+    for (yy = y; yy < y + Ticks[1].t0;
+	 yy = Ticks[1].l1 ? log10(exp10(yy) + exp10(y)) : yy + Ticks[1].t1) { 
       DrawTickY(yy, 1);
     }
     color(GRAY);
     DrawTickY(y, 0);
-    if (LogY == ty.l0) {
+    if (LogY == Ticks[1].l0) {
       sprintf(text, "%g", y); /*printf("%g\n", y);*/
     } else {
       sprintf(text, "%.3g", exp10(y));/*printf("%.3g\n", exp10(y));*/
@@ -1267,7 +1273,7 @@ void ProcessQueue(void) {
 #endif
   
   if (dev == KEYBD) {
-    /* Reenable PAD Keys, don't misinterpret them as Number keys */
+    /* Don't misinterpret PAD keys as Number keys */
     Int32 dev2 = qtest();
     switch(dev2) {
     case PAD1:
@@ -1281,7 +1287,7 @@ void ProcessQueue(void) {
       dev = qread(&val);
       break;
     }
-  }      
+  }
   
   switch(dev) {
   case INPUTCHANGE:
@@ -1497,8 +1503,7 @@ void write_both(int flag) {
   color(BgColor); rectfi(0,0,2,2); sleep(0);
 }
 
-char *gnuplot_label(const char *from) {
-  static char to[128];
+char *gnuplot_label(char *to, const char *from) {
   const char *fromp = from;
   char *top   = to;
   
@@ -1543,8 +1548,7 @@ char *gnuplot_label(const char *from) {
   return to;
 }
 
-char *xmgr_label(const char *from) {
-  static char to[128];
+char *xmgr_label(char *to, const char *from) {
   const char *fromp = from;
   char *top   = to;
   
@@ -1578,8 +1582,9 @@ char *xmgr_label(const char *from) {
 
 void write_xmgr(void) {
   FILE *xmgrfile;
-  int i, j;
+  int i, j, k;
   char *logtype[2][2] = {{"xy", "logy"}, {"logx", "logxy"}};
+  char xlab[128], ylab[128];
   
   if (XmgrName[0] == 0) {
     sprintf(XmgrName, "fsscale-%d-%s,%s.xmgr", 
@@ -1597,51 +1602,63 @@ void write_xmgr(void) {
 	  "@default char size 1.0\n"
 	  "@default font 4\n"
 	  "@default font source 0\n"
-	  "@default symbol size 1.0\n"
 	  "@with g0\n"
 	  "@g0 on\n"
 	  "@g0 label off\n"
 	  "@g0 type %s\n"
-	  "@g0 autoscale type AUTO\n"
-	  /* "@ world xmin %g\n" "@ world xmax %g\n"
-	     "@ world ymin %g\n" "@ world ymax %g\n" */
+	  /*"@g0 autoscale type AUTO\n"*/
+	  "@ world xmin %g\n" "@ world xmax %g\n"
+	  "@ world ymin %g\n" "@ world ymax %g\n"
 	  "@ view xmin 0.15\n" "@ view xmax 0.75\n"
 	  "@ view ymin 0.15\n" "@ view ymax 0.85\n"
 	  "@ title \"%s\"\n"
 	  "@ title size 1.5\n"
 	  "@ title color 1\n"
 	  "@ xaxis label \"%s\"\n"
+	  "@ xaxis tick major %g\n"
+	  "@ xaxis tick minor %g\n"
+	  "@ xaxis ticklabel start type spec\n"
+	  "@ xaxis ticklabel start %g\n"
 	  "@ yaxis label \"%s\"\n"
+	  "@ yaxis tick major %g\n"
+	  "@ yaxis tick minor %g\n"
+	  "@ yaxis ticklabel start type spec\n"
+	  "@ yaxis ticklabel start %g\n"
 	  "@ legend on\n",
 	  Progname,
 	  logtype[LogX][LogY],
-	  /*LogX ? exp10(OXmin) : OXmin,
-	    LogX ? exp10(OXmax) : OXmax,
-	    LogY ? exp10(OYmin) : OYmin,
-	    LogY ? exp10(OYmax) : OYmax,*/
+	  LogX ? exp10(OXmin) : OXmin,
+	  LogX ? exp10(OXmax) : OXmax,
+	  LogY ? exp10(OYmin) : OYmin,
+	  LogY ? exp10(OYmax) : OYmax,
 	  Title,
-	  xmgr_label(Xlab),
-	  xmgr_label(Ylab)
+	  xmgr_label(xlab, Xlab),
+	  Ticks[0].t0, Ticks[0].t1,
+	  Ticks[0].t0 * ceil(OXmin / Ticks[0].t0),
+	  xmgr_label(ylab, Ylab),
+	  Ticks[1].t0, Ticks[1].t1,
+	  Ticks[1].t0 * ceil(OYmin / Ticks[1].t0)
 	  );
-  for (i = 0; i < S; i++) if (Set[i].active) {
+  for (i = k = 0; i < S; i++) if (Set[i].active) {
+    /* k should be i, but there is a bug in xmgr... */
     Set_t *s  = &Set[i];
     
-    fprintf(xmgrfile, "@ s%d linewidth %d\n",		i, Lines);
-    fprintf(xmgrfile, "@ s%d color %d\n",		i, i + 1);
-    fprintf(xmgrfile, "@ s%d symbol %d\n",		i, i + 2);
-    fprintf(xmgrfile, "@ s%d symbol color %d\n",	i, i + 1);
-    fprintf(xmgrfile, "@ s%d symbol size 0.5\n",	i);
-    fprintf(xmgrfile, "@ s%d type xy\n",		i);
-    fprintf(xmgrfile, "@ s%d comment \" Bla \"\n",	i);
-    fprintf(xmgrfile, "@ legend string %d \"%s = %g\"\n",
-	    i, Names[0], s->L);
+    fprintf(xmgrfile, "@ s%d linewidth %d\n",		k, Lines);
+    fprintf(xmgrfile, "@ s%d color %d\n",		k, i + 1);
+    fprintf(xmgrfile, "@ s%d symbol %d\n",		k, i + 2);
+    fprintf(xmgrfile, "@ s%d symbol color %d\n",	k, i + 1);
+    fprintf(xmgrfile, "@ s%d symbol size 0.5\n",	k);
+    fprintf(xmgrfile, "@ s%d type xy\n",		k);
+    fprintf(xmgrfile, "@ s%d comment \" Bla \"\n",	k);
+    fprintf(xmgrfile, "@ legend string %d \"%s = %g\"\n",k, Names[0], s->L);
     for (j = 0; j < s->N; j++) {
       Data_t *d = &s->Data[j];
       fprintf(xmgrfile, "%g %g\n", d->x[0], d->x[1]);
     }
     fprintf(xmgrfile, "&\n");
+    k++;
   }
-  fprintf(xmgrfile, "@autoscale\n");
+  /*fprintf(xmgrfile, "@autoscale\n");*/
   fclose(xmgrfile);
 }
 
@@ -1674,6 +1691,7 @@ void write_gnuplot(void) {
   FILE *gpfile;
   int i, j, first;
   const char *styles[] = { "points", "lines", "linespoints" };
+  char xlab[128], ylab[128];
   
   if (GPName[0] == 0) {
     sprintf(GPName, "fsscale-%d-%s,%s.gp", 
@@ -1690,8 +1708,8 @@ void write_gnuplot(void) {
   fprintf(gpfile, "set data style %s\n", styles[Lines]);
   fprintf(gpfile, "set title '%s'\n", Title);
   
-  fprintf(gpfile, "set xlabel '%s'\n", gnuplot_label(Xlab));
-  fprintf(gpfile, "set ylabel '%s'\n", gnuplot_label(Ylab));
+  fprintf(gpfile, "set xlabel '%s'\n", gnuplot_label(xlab, Xlab));
+  fprintf(gpfile, "set ylabel '%s'\n", gnuplot_label(ylab, Ylab));
   
   fprintf(gpfile, "plot [%g:%g][%g:%g] ",
 	  LogX ? exp10(OXmin) : OXmin,
@@ -1719,8 +1737,6 @@ void write_gnuplot(void) {
   for (i = 0; i < S; i++) if (Set[i].active) {
     Set_t *s  = &Set[i];
     if (s->datfilename[0] == 0) {
-      /*sprintf(s->datfilename, "%s.dat.XXX", GPName);
-	mkstemp(s->datfilename);*/
       sprintf(s->datfilename, "fsscale-%d-%s,%s,%s=%g.dat",
 	      getpid(), Names[1], Names[2], Names[0], s->L);
     }
