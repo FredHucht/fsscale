@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995-2001
  *
- * $Id: fsscale.c,v 2.53 2001-07-11 11:57:11+02 fred Exp fred $
+ * $Id: fsscale.c,v 2.54 2001-07-11 16:22:45+02 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.54  2001-07-11 16:22:45+02  fred
+ * Added Title to file names
+ *
  * Revision 2.53  2001-07-11 11:57:11+02  fred
  * Added write_dat(), now 'p' also writes a single data file with sets
  * seperated by double blank lines (loadable by gnuplot and xmgr*).
@@ -169,7 +172,7 @@
  */
 /*#pragma OPTIONS inline+Pow*/
 
-char   *RCSId = "$Id: fsscale.c,v 2.53 2001-07-11 11:57:11+02 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.54 2001-07-11 16:22:45+02 fred Exp fred $";
 
 /* Note: AIX: Ignore warnings "No function prototype given for 'finite'" See math.h, line 429 */
 
@@ -356,7 +359,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.53 $ (C) Fred Hucht 1995-1998\n"
+	    "$Revision: 2.54 $ (C) Fred Hucht 1995-1998\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
@@ -695,18 +698,22 @@ double Pow(double x, double y) {
 }
 #endif
 
+double ALog(double x) {
+  return fabs(log(x));
+}
+
 double PowLog(double x, double y) {
   return
     y == 0.0 ? 1.0 :
-    y == 1.0 ? log(x) :
-    pow(log(x), y);
+    y == 1.0 ? ALog(x) :
+    pow(ALog(x), y);
 }
 
 double PowLogLog(double x, double y) {
   return
     y == 0.0 ? 1.0 :
-    y == 1.0 ? log(log(x)) :
-    pow(log(log(x)), y);
+    y == 1.0 ? ALog(ALog(x)) :
+    pow(ALog(ALog(x)), y);
 }
 
 void Calculate(NumParams *p) {
@@ -1111,13 +1118,13 @@ void DrawMain(const NumParams *p, GraphParams *g) {
   /* (T - Tc)^Z */
   WriteTerm(p, g, NULL,  ATc, 1, AZ,  AOff, 0);
   /* log(T - Tc)^Lz */
-  WriteTerm(p, g, "log", ATc, 0, ALz, AOff, 0);
+  WriteTerm(p, g, "alog", ATc, 0, ALz, AOff, 0);
   /* (L - Lc)^(X + Dx * D) */
   WriteTerm(p, g, NULL,  ALc, 1, AX,  ADx,  0);
   /* log(L - Lc)^Lx */
-  WriteTerm(p, g, "log", ALc, 0, ALx, AOff, 0);
+  WriteTerm(p, g, "alog", ALc, 0, ALx, AOff, 0);
   /* loglog(L - Lc)^LLx */
-  WriteTerm(p, g, "loglog", ALc, 0, ALLx, AOff, 0);
+  WriteTerm(p, g, "alogalog", ALc, 0, ALLx, AOff, 0);
   
   sprintf(text, "; Y = #%c%s#0", CI(AYf) + '0',
 	  p->Yf < 0.0 ? "-" : CI(AYf) ? "+" : "");
@@ -1129,13 +1136,13 @@ void DrawMain(const NumParams *p, GraphParams *g) {
   /* (L - Lc)^(Y + Dy * D) */
   WriteTerm(p, g, NULL,  ALc, 0, AY,  ADy,  1);
   /* log(L - Lc)^Ly */
-  WriteTerm(p, g, "log", ALc, 0, ALy, AOff, 1);
+  WriteTerm(p, g, "alog", ALc, 0, ALy, AOff, 1);
   /* loglog(L - Lc)^LLy */
-  WriteTerm(p, g, "loglog", ALc, 0, ALLy, AOff, 0);
+  WriteTerm(p, g, "alogalog", ALc, 0, ALLy, AOff, 0);
   /* (T - Tc)^M */
   WriteTerm(p, g, NULL,  ATc, 0, AM,  AOff, 1);
   /* log(T - Tc)^Lm */
-  WriteTerm(p, g, "log", ATc, 0, ALm, AOff, 1);
+  WriteTerm(p, g, "alog", ATc, 0, ALm, AOff, 1);
   
   cmov2(CX = FRAME, CY = g->FontH + g->FontD);
   if (p->NumRows == 3)
