@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995, 1996
  *
- * $Id: fsscale.c,v 2.5 1996/09/12 10:30:33 fred Exp michael $
+ * $Id: fsscale.c,v 2.6 1996/10/23 13:33:38 michael Exp michael $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.6  1996/10/23 13:33:38  michael
+ * Added gnuplot output and isatty(fileno(stdin)) warning
+ *
  * Revision 2.5  1996/09/12 10:30:33  fred
  * Changed ZCHECK to INTCHECK, fixed bug Xmax, Ymax always >= 0
  *
@@ -126,7 +129,7 @@ int    Swh, FontH, FontD;
 char   *Title = "FSScale";
 char   *Progname;
 char   *Font  = "-*-Times-Medium-R-Normal--*-120-*-*-*-*-*-*";
-char   *RCSId = "$Id: fsscale.c,v 2.5 1996/09/12 10:30:33 fred Exp michael $";
+char   *RCSId = "$Id: fsscale.c,v 2.6 1996/10/23 13:33:38 michael Exp michael $";
 
 void gnuplot(int);    
 void byebye(int sig);
@@ -156,7 +159,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.5 $ (C) Fred Hucht 1995, 1996\n"
+	    "$Revision: 2.6 $ (C) Fred Hucht 1995, 1996\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
@@ -206,6 +209,7 @@ void Usage(int verbose) {
 	    "  Key 'r':            Reset all values\n"
 	    "  Key 'l':            Toggle drawing of lines\n"
 	    "  Key 'g':            Toggle drawing of grid\n"
+	    "  Key 'p':            Write a 'fsscale.gp' gnuplot-loadable file\n"
 	    "  Key 's':            Save actual graph to file 'fsscale.gif'\n"
 #ifdef BEWERT
 	    "  Key 'v':            Toggle drawing of variance function\n"
