@@ -1,7 +1,10 @@
 /*
  * Finite Size scaling (C) Fred Hucht 1995, 1996
  *
- * $Id: fsscale.c,v 2.1 1996/07/19 19:49:17 fred Exp fred $
+ * $Id: fsscale.c,v 2.1 1996/07/19 19:51:58 fred Exp $
+ *
+ * $Log$
+ *
  */
 #include <X11/Ygl.h>
 #include <stdio.h>
@@ -68,6 +71,7 @@ double OXmin, OXmax, OYmin, OYmax; 	/* Drawing range */
 int    LogX  = 0;
 int    LogY  = 0;
 double Tc    = 0.0;
+double Mc    = 0.0;
 double Ny    = 0.0;
 double Beta  = 0.0;
 double ExpX  = 0.0;
@@ -98,7 +102,7 @@ int    Swh, FontH, FontD;
 char   *Title = "FSScale";
 char   *Progname;
 char   *Font  = "-*-Times-Medium-R-Normal--*-120-*-*-*-*-*-*";
-char   *RCSId = "$Id: fsscale.c,v 2.1 1996/07/19 19:49:17 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.1 1996/07/19 19:51:58 fred Exp $";
 
 double exp10(double x) {
   return pow(10.0, x);
@@ -128,7 +132,7 @@ void Usage(int verbose) {
 	      "                     suszeptibility (with -g) M\n"*/
 	    "\n"
 	    "X-Axis is scaled as X = (T - Tc) * L^x              ( x =    1 / ny )\n"
-	    "Y-Axis is scaled as Y =  M       * L^y * (T - Tc)^m ( y = beta / ny )\n"
+	    "Y-Axis is scaled as Y = (M - Mc) * L^y * (T - Tc)^m ( y = beta / ny )\n"
 	    /*"Y-Axis is scaled as  M       * L^y  ( y = Beta/Ny or y = -Gamma/Ny )\n"*/
 	    "\n"
 	    "Options are:\n"
@@ -153,6 +157,7 @@ void Usage(int verbose) {
 	    "  Arrow up|down:      Change exponent y:       y -=|+= d\n"
 	    "  Page  up|down:      Change exponent m:       m -=|+= d\n"
 	    "  Keys 't'|'T':       Change Tc:              Tc -=|+= d\n"
+	    "  Keys 'm'|'M':       Change Mc:              Mc -=|+= d\n"
 	    "  Keys 'n'|'N':       Change exponent ny:     ny -=|+= d\n"
 	    "  Keys 'b'|'B':       Change exponent beta: beta -=|+= d\n"
 	    "\n"
@@ -345,7 +350,7 @@ void Calculate(void) {
     for(j = 0; j < s->N; j++) {
       Data_t *d = &s->Data[j];
       double x  = d->x[0] = (d->T - Tc) * Lx;
-      double y  = d->x[1] =  d->M       * Ly * pow(d->T - Tc, ExpM);
+      double y  = d->x[1] = (d->M - Mc) * Ly * pow(d->T - Tc, ExpM);
       
       d->lx[0] = (x > 0.0) ? log10(x) : 0.0;
       d->lx[1] = (y > 0.0) ? log10(y) : 0.0;
@@ -581,7 +586,7 @@ void charstrH(char * text, int h) {
 
 void Draw(void) {
   int i, j;
-  char tmtc[80], text[256];
+  char tmtc[80], mmmc[80], text[256];
   double x, y;
   struct Ticks_ tx, ty;
   double dxmin, dxmax, dymin, dymax;
@@ -598,6 +603,9 @@ void Draw(void) {
   if(Tc) sprintf(tmtc, "(%s%+g)", Names[1], -Tc);
   else   sprintf(tmtc, "%s",      Names[1]);
   
+  if(Mc) sprintf(mmmc, "(%s%+g)", Names[2], -Mc);
+  else   sprintf(mmmc, "%s",      Names[2]);
+  
   sprintf(text, "d = %g; X = %s", Delta, tmtc); charstr (text);
   if(ExpX) {
     sprintf(text, " * %s", Names[0]); charstr (text);
@@ -605,7 +613,7 @@ void Draw(void) {
       sprintf(text, "%g",  ExpX);     charstrH(text, FontH/2);
     }
   }
-  sprintf(text, "; Y = %s", Names[2]); charstr(text);
+  sprintf(text, "; Y = %s", mmmc);    charstr(text);
   if(ExpM) {
     sprintf(text, " * %s", tmtc);     charstr(text);
     if(fabs(ExpM - 1.0) > 1e-8) {
@@ -994,9 +1002,11 @@ void ProcessQueue(void) {
     } else switch(val) {
     case 'a': AutoScale = 1;               rd = 1; break;
     case 'A': AutoScale = 0;                       break;
-    case 'r': ExpX = ExpY = ExpM = Tc = 0; XY = 1; break;
+    case 'r': ExpX = ExpY = ExpM = Tc = Mc = 0; XY = 1; break;
     case 't': Tc   += Delta; ZCHECK(Tc  ); rc = 1; break;
     case 'T': Tc   -= Delta; ZCHECK(Tc  ); rc = 1; break;
+    case 'm': Mc   += Delta; ZCHECK(Mc  ); rc = 1; break;
+    case 'M': Mc   -= Delta; ZCHECK(Mc  ); rc = 1; break;
 #if 0
     case 'x': ExpX += Delta; ZCHECK(ExpX); XY = 1; break;
     case 'X': ExpX -= Delta; ZCHECK(ExpX); XY = 1; break;
