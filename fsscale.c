@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995, 1996
  *
- * $Id: fsscale.c,v 2.12 1996-11-05 18:52:35+01 fred Exp fred $
+ * $Id: fsscale.c,v 2.13 1996-11-06 19:35:20+01 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.13  1996-11-06 19:35:20+01  fred
+ * Added new input method using Keypad keys.
+ *
  * Revision 2.12  1996-11-05 18:52:35+01  fred
  * 'r' now resets to values given on commandline
  *
@@ -150,7 +153,7 @@ int    Swh, FontH, FontD;
 char   *Title = "FSScale";
 char   *Progname;
 char   *Font  = "-*-Times-Medium-R-Normal--*-120-*-*-*-*-*-*";
-char   *RCSId = "$Id: fsscale.c,v 2.12 1996-11-05 18:52:35+01 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.13 1996-11-06 19:35:20+01 fred Exp fred $";
 
 #define NUMACTIVE (sizeof(Variables)/sizeof(Variables[0]))
 double dummy = 0.0, *Variables[] = {
@@ -194,7 +197,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.12 $ (C) Fred Hucht 1995, 1996\n"
+	    "$Revision: 2.13 $ (C) Fred Hucht 1995, 1996\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
@@ -716,9 +719,9 @@ void Draw(void) {
   ncx = sprintf(Xlab, "$");
   ncy = sprintf(Ylab, "$");
   
-  sprintf(lmlc, Lc ? "(%s%+g)" : "%s", Names[0], -Lc);
-  sprintf(tmtc, Tc ? "(%s%+g)" : "%s", Names[1], -Tc);
-  sprintf(mmmc, Mc ? "(%s%+g)" : "%s", Names[2], -Mc);
+  sprintf(lmlc, Lc || Active == ALc ? "(%s%+g)" : "%s", Names[0], -Lc);
+  sprintf(tmtc, Tc || Active == ATc ? "(%s%+g)" : "%s", Names[1], -Tc);
+  sprintf(mmmc, Mc || Active == AMc ? "(%s%+g)" : "%s", Names[2], -Mc);
   
   cmov2(FRAME, 2 * FontH + FontD);
   color(FgColor);
