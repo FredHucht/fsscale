@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995-2002
  *
- * $Id: fsscale.c,v 2.61 2002-08-15 15:31:15+02 fred Exp fred $
+ * $Id: fsscale.c,v 2.62 2002-08-15 16:08:38+02 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.62  2002-08-15 16:08:38+02  fred
+ * Also save ReduceT
+ *
  * Revision 2.61  2002-08-15 15:31:15+02  fred
  * Added -p params file support
  *
@@ -195,7 +198,7 @@
  */
 /*#pragma OPTIONS inline+Pow*/
 
-char   *RCSId = "$Id: fsscale.c,v 2.61 2002-08-15 15:31:15+02 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.62 2002-08-15 16:08:38+02 fred Exp fred $";
 
 /* Note: AIX: Ignore warnings "No function prototype given for 'finite'"
  * From math.h:
@@ -291,11 +294,13 @@ typedef struct NumParams_ {
   char  *VarsFile;
   double VarFactor;
   double Vardummy,
-    /**/d, L0, Xf, Tc, Z, Lz, Lc, X, Dx, Lx, LLx, Lsf, Xs, Lxs, Yf, Mc, U, Du, Y, Dy, Ly, LLy, M, Lm;
+    /**/d, L0, Xf, Tc, Z, Lz, Lc, X, Dx, Lx, LLx, Lxsf, Xs, Lxs, Yf, Mc, U, Du, Y, Dy, Ly, LLy, M, Lm, Lysf, Ys, Lys;
   double ReduceT; /* Must be behind Vars for Read/WriteVars */
 } NumParams;
 enum ActiveNames {
-  AOff,Ad,AL0,AXf,ATc,AZ,ALz,ALc,AX,ADx,ALx,ALLx,ALsf,AXs,ALxs,AYf,AMc,AU,ADu,AY,ADy,ALy,ALLy,AM,ALm,
+#define ActiveDefaults /* see start of main() */ \
+ {AOff,Ad,AL0,AXf,ATc,AZ,ALz,ALc,AX,    ALx,ALLx,ALxsf,AXs,ALxs,AYf,AMc,AU,    AY,    ALy,ALLy,AM,ALm,ALysf,AYs,ALys}
+  AOff,Ad,AL0,AXf,ATc,AZ,ALz,ALc,AX,ADx,ALx,ALLx,ALxsf,AXs,ALxs,AYf,AMc,AU,ADu,AY,ADy,ALy,ALLy,AM,ALm,ALysf,AYs,ALys,
   ALast
 };
 
@@ -314,7 +319,7 @@ struct Defaults_ {
 		"Dx",  0,
 		"Lx",  0,
 		"LLx", 0,
-		"Lsf", 0,
+		"Lxsf", 0,
 		"Xs",  0,
 		"Lxs", 0,
 		"Yf",  1,
@@ -327,6 +332,9 @@ struct Defaults_ {
 		"LLy", 0,
 		"M",   0,
 		"Lm",  0,
+		"Lysf", 0,
+		"Ys",  0,
+		"Lys", 0,
 		"ReduceT", 0
 };
 
@@ -406,18 +414,31 @@ double exp10(double x) {
 void WriteVars(const NumParams *p) {
   const double *Vars = &p->Vardummy;
   int a, n = 0, fail = 0;
-  FILE *tn;
+  FILE *tn = NULL;
   char bakfile[256];
-  snprintf(bakfile, sizeof(bakfile), "%s%s", p->VarsFile, "~");
-  if (0 != rename(p->VarsFile, bakfile)) {
-    perror(p->VarsFile);
-    fail = 1;
-  }
-  if (fail == 0) {
-    tn = fopen(p->VarsFile, "w");
-  }
-  if (tn == 0) {
-    perror(p->VarsFile);
+  
+  if (p->VarsFile) {
+    extern int errno;
+    snprintf(bakfile, sizeof(bakfile), "%s%s", p->VarsFile, "~");
+    if (0 != rename(p->VarsFile, bakfile) && errno != 2) {
+#if 0
+      int e = errno;
+#endif
+      perror(p->VarsFile);
+#if 0
+      fprintf(stderr, "errno = %d\n", e);
+#endif
+      fail = 1;
+    }
+    if (fail == 0) {
+      tn = fopen(p->VarsFile, "w");
+    }
+    if (tn == NULL) {
+      perror(p->VarsFile);
+      tn = stdout;
+      fail = 1;
+    }
+  } else {
     tn = stdout;
     fail = 1;
   }
@@ -473,7 +494,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.61 $ (C) Fred Hucht 1995-2002\n"
+	    "$Revision: 2.62 $ (C) Fred Hucht 1995-2002\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension L\n"
@@ -703,7 +724,7 @@ void GraphInit(GraphParams *g) {
   
   g->FontH = getheight();
   g->FontD = getdescender();
-  g->Swh   = 4 * g->FontH + 2;
+  g->Swh   = 7.5 * g->FontH + 2;
   
   /* Plot window */
   prefposition(FRAME,  g->XSize - FRAME - 1,
@@ -719,6 +740,7 @@ void GraphInit(GraphParams *g) {
   
   deflinestyle(1, 0xAAAA);
   deflinestyle(2, 0x8888);
+  deflinestyle(3, 0x0101);
 }
 
 void ReadData(NumParams *p) {
@@ -849,25 +871,32 @@ void Calculate(NumParams *p) {
   
   for (i = 0; i < p->S; i++) if (p->Set[i].active) {
     Set_t *s  = &p->Set[i];
-    double l  = s->L / p->L0 - p->Lc;
-    double Lx = p->Xf * Pow(l, p->X + p->Dx * s->D) * PowLog(l, p->Lx) * PowLogLog(l, p->LLx);
-    double Ly = p->Yf * Pow(l, p->Y + p->Dy * s->D) * PowLog(l, p->Ly) * PowLogLog(l, p->LLy);
-    double Ls = p->Xf * p->Lsf * Pow(l, p->Xs) * PowLog(l, p->Lxs);
+    double l, Lx, Ly, Lxs, Lys;
+    
+    if (s->L == 0) { /* scaling function */
+      l = Lx = Ly = Lxs = Lys = 0;
+    } else {
+      l   = s->L / p->L0 - p->Lc;
+      Lx  = p->Xf * Pow(l, p->X + p->Dx * s->D) * PowLog(l, p->Lx) * PowLogLog(l, p->LLx);
+      Ly  = p->Yf * Pow(l, p->Y + p->Dy * s->D) * PowLog(l, p->Ly) * PowLogLog(l, p->LLy);
+      Lxs = p->Xf * p->Lxsf * Pow(l, p->Xs) * PowLog(l, p->Lxs);
+      Lys = p->Yf * p->Lysf * Pow(l, p->Ys) * PowLog(l, p->Lys);
+    }
     
     for (j = 0; j < s->N; j++) {
       const Data_t *ds = &s->Data[j];
-      Data_t *d  = &s->Data[Lx > 0 ? j : s->N - 1 - j];
+      Data_t *d  = &s->Data[Lx >= 0 ? j : s->N - 1 - j];
       double t = ds->T - p->Tc;
       
       if (p->ReduceT != 0 && p->Tc) t /= p->Tc;
       
       if (s->L == 0) { /* scaling function */
 	d->x = ds->T;
-	d->y = ds->M;
+	d->y = ds->M * Pow(ds->T, p->M);
       } else {
-	d->x = Lx * Pow(t, p->Z) * PowLog(t, p->Lz) + Ls;
+	d->x = Lx * Pow(t, p->Z) * PowLog(t, p->Lz) + Lxs;
 	d->y = Ly * Pow(t, p->M) * PowLog(t, p->Lm)
-	  * Pow(ds->M - p->Mc, p->U + p->Du * s->D);
+	  * Pow(ds->M - p->Mc, p->U + p->Du * s->D) + Lys;
       }
       
       if (finite(d->x) && finite(d->y)) {
@@ -1011,8 +1040,8 @@ double Valuate(NumParams *p) {
 
 void DrawTickX(const NumParams *p, const GraphParams *g, double x, int level) {
   double len = g->LevelLen[level];
-  if (g->Grid && level == 0) {
-    setlinestyle(2);
+  if (g->Grid == 2 || g->Grid == 1 && level == 0) {
+    setlinestyle(2 + level);
     move2(x, p->OYmin); draw2(x, p->OYmax);
     setlinestyle(0);
   }
@@ -1022,8 +1051,8 @@ void DrawTickX(const NumParams *p, const GraphParams *g, double x, int level) {
 
 void DrawTickY(const NumParams *p, const GraphParams *g, double y, int level) {
   double len = g->LevelLen[level];
-  if (g->Grid && level == 0) {
-    setlinestyle(2);
+  if (g->Grid == 2 || g->Grid == 1 && level == 0) {
+    setlinestyle(2 + level);
     move2(p->OXmin, y); draw2(p->OXmax, y);
     setlinestyle(0);
   }
@@ -1244,7 +1273,8 @@ void DrawMain(const NumParams *p, GraphParams *g) {
   
   color(g->FgColor);
   
-  cmov2(CX = FRAME, CY = 2 * g->FontH + g->FontD);
+  /* Line 1 */
+  cmov2(CX = FRAME, CY = 6 * g->FontH + g->FontD);
   charstrC("d = ");
   sprintf(text, "#%c%g#0", CI(Ad) + '0', p->d);
   charstrP(text, 0, &g->cpos[Ad]);
@@ -1253,16 +1283,16 @@ void DrawMain(const NumParams *p, GraphParams *g) {
     sprintf(text, "; %s /= #%c%g#0", g->Names[0], CI(AL0) + '0', p->L0);
     charstrP(text, 0, &g->cpos[AL0]);
   }
-  
-  /*sprintf(text, "; X = #%c%s#0", CI(AXf) + '0',
-    p->Xf < 0.0 ? "-" : CI(AXf) ? "+" : "");*/
-  
+
+  /* Line 2 */
+  cmov2(CX = FRAME, CY = 4.5 * g->FontH + g->FontD);
+  /****** X-axis ******/
   if (g->ShowZero || CI(AXf) || p->Xf != 1.0) {
-    sprintf(text, "; X/#%c%g#0 =", CI(AXf) + '0', p->Xf);
+    sprintf(text, "X/#%c%g#0 =", CI(AXf) + '0', p->Xf);
     charstrP(text, 0, &g->cpos[AXf]);
     g->Labi[0] = sprintf(g->Lab[0], "%g [", p->Xf);
   } else {
-    charstrP("; X = ", 0, &g->cpos[AXf]);
+    charstrP("X = ", 0, &g->cpos[AXf]);
     g->Labi[0] = sprintf(g->Lab[0], "");
   }
   
@@ -1277,29 +1307,29 @@ void DrawMain(const NumParams *p, GraphParams *g) {
   /* loglog(L - Lc)^LLx */
   WriteTerm(p, g, "alogalog", ALc, 0, ALLx, AOff, 0);
   
-  if (g->ShowZero || CI(ALsf) || p->Lsf) {
-    /* + Lsf */
-    sprintf(text, " #%c%+g#0", CI(ALsf) + '0', p->Lsf);
-    charstrP(text, 0, &g->cpos[ALsf]);
+  if (g->ShowZero || CI(ALxsf) || p->Lxsf) {
+    /* + Lxsf */
+    sprintf(text, " #%c%+g#0", CI(ALxsf) + '0', p->Lxsf);
+    charstrP(text, 0, &g->cpos[ALxsf]);
+    g->Labi[0] += sprintf(g->Lab[0] + g->Labi[0], "%+g", p->Lxsf);
     /* (L - Lc)^Xs */
     WriteTerm(p, g, NULL, ALc, 0, AXs,  AOff,  0);
     /* log(L - Lc)^Lxs */
     WriteTerm(p, g, "alog", ALc, 0, ALxs, AOff, 0);
   }
   if (g->ShowZero || CI(AXf) || p->Xf != 1.0) {
-    /*charstrC("]");*/
-    g->Labi[0] += sprintf(g->Lab[0], "]");
+    g->Labi[0] += sprintf(g->Lab[0] + g->Labi[0], "]");
   }
-  /*sprintf(text, "; Y = #%c%s#0", CI(AYf) + '0',
-	  p->Yf < 0.0 ? "-" : CI(AYf) ? "+" : "");*/
-  /*g->Labi[1] = sprintf(g->Lab[1], "%s", p->Yf == 1.0 ? "" : "-");*/
   
+  /* Line 3 */
+  cmov2(CX = FRAME, CY = 3 * g->FontH + g->FontD);
+  /****** Y-axis ******/
   if (g->ShowZero || CI(AYf) || p->Yf != 1.0) {
-    sprintf(text, "; Y/#%c%g#0 =", CI(AYf) + '0', p->Yf);
+    sprintf(text, "Y/#%c%g#0 =", CI(AYf) + '0', p->Yf);
     charstrP(text, 0, &g->cpos[AYf]);
-    g->Labi[1] = sprintf(g->Lab[1], "%g", p->Yf);
+    g->Labi[1] = sprintf(g->Lab[1], "%g [", p->Yf);
   } else {
-    charstrP("; Y = ", 0, &g->cpos[AYf]);
+    charstrP("Y = ", 0, &g->cpos[AYf]);
     g->Labi[1] = sprintf(g->Lab[1], "");
   }
   
@@ -1316,7 +1346,22 @@ void DrawMain(const NumParams *p, GraphParams *g) {
   /* log(T - Tc)^Lm */
   WriteTerm(p, g, "alog", ATc, 0, ALm, AOff, 1);
   
-  cmov2(CX = FRAME, CY = g->FontH + g->FontD);
+  if (g->ShowZero || CI(ALysf) || p->Lysf) {
+    /* + Lysf */
+    sprintf(text, " #%c%+g#0", CI(ALysf) + '0', p->Lysf);
+    charstrP(text, 0, &g->cpos[ALysf]);
+    g->Labi[1] += sprintf(g->Lab[1] + g->Labi[1], "%+g", p->Lysf);
+    /* (L - Lc)^Ys */
+    WriteTerm(p, g, NULL, ALc, 0, AYs,  AOff,  0);
+    /* log(L - Lc)^Lys */
+    WriteTerm(p, g, "alog", ALc, 0, ALys, AOff, 0);
+  }
+  if (g->ShowZero || CI(AYf) || p->Yf != 1.0) {
+    g->Labi[1] += sprintf(g->Lab[1] + g->Labi[1], "]");
+  }
+  
+  /* Line 4 */
+  cmov2(CX = FRAME, CY = 1.5 * g->FontH + g->FontD);
   if (p->NumRows == 3)
     sprintf(text, "%s =", g->Names[0]);
   else
@@ -1778,7 +1823,7 @@ void ProcessQueue(NumParams *p, GraphParams *g) {
   Mmx = mx - g->XPos;
   Mmy = my - g->YPos;
   if (g->ShiftKey && Mmx > 0 && Mmx < g->XSize &&
-      Mmy > 2 * g->FontH && Mmy < 4 * g->FontH) {
+      Mmy > 3 * g->FontH && Mmy < 7.5 * g->FontH) {
     /*printf("%d %d\n", Mmx, Mmy);*/
     if (!g->ShowZero) todo = ReMa;
     g->ShowZero = 1;
@@ -1986,7 +2031,7 @@ void ProcessQueue(NumParams *p, GraphParams *g) {
     case '/': p->ReduceT = 1 - p->ReduceT;   todo = ReCa; break;
     case 'r': ReverseVideo(g);               todo = ReWr; break;
     case 'l': g->Lines = (g->Lines + 1) % 3; todo = ReWr; break;
-    case 'g': g->Grid ^= 1;                  todo = ReWr; break;
+    case 'g': g->Grid  = (g->Grid  + 1) % 3; todo = ReWr; break;
     case 'v': g->ShowVar ^= 1;               todo = ReVa; break;
     case 'V': p->VarType = (p->VarType + 1) % 4;
       todo = p->Bewert ? ReVa : ReNone; break;
@@ -2403,9 +2448,7 @@ int main(int argc, char *argv[]) {
     {"L", "T", "M", "D"},
     {0.02, 0.01},
     0, 0, 0,
-    {AOff, Ad, AL0,
-     AXf, ATc, AZ, ALz, ALc, AX,       ALx, ALLx, ALsf, AXs, ALxs,
-     AYf, AMc, AU,       AY,     ALy, ALLy,   AM, ALm}
+    ActiveDefaults
   };
   
   Pp = &P;
@@ -2428,6 +2471,7 @@ int main(int argc, char *argv[]) {
   P.Ny = 1.0 / P.X;
   P.FullFit = 1;
   P.VarFactor = 1.0;
+  P.VarsFile = NULL;
   
   if (isatty(fileno(stdin)))
     fprintf(stderr, "%s: reading input from terminal.\n", P.Progname);
