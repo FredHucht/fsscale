@@ -5,6 +5,9 @@
  * $Id: fsscale.c,v 2.36 1998-02-28 01:06:51+01 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.37  1998-03-02 12:10:10+01  fred
+ * Re-removed dashed grid (too slow...)
+ *
  * Revision 2.36  1998-02-28 01:06:51+01  fred
  * Removed all global variables for performance reasons
  *
@@ -140,15 +143,13 @@ char   *RCSId = "$Id: fsscale.c,v 2.36 1998-02-28 01:06:51+01 fred Exp fred $";
 
 #define GRAY 8
 #define ACOLOR 9
-
 #define FRAME 	10
-
 #define NODATA  4711.0815 /* forgive me */
 
 typedef struct Data_t_ {
-  double T;			/* X-axis, normally temperature */
-  double M;			/* Y-axis, normally order parameter */
-  double x,  y;			/* Plot position {x,y} */
+  double T;		/* X-axis, normally temperature */
+  double M;		/* Y-axis, normally order parameter */
+  double x, y;		/* Plot position {x,y} */
 } Data_t;
 
 typedef struct Set_t_ {
@@ -159,16 +160,59 @@ typedef struct Set_t_ {
   int	 N;		/* Number of data points */
   Data_t *Data;		/* Set data */
 #define ASZ	1024
-  double  Fit[ASZ];	/* Fit */
+  double Fit[ASZ];	/* Fit */
   int    sorted;
 #ifdef GNUPLOT_DATFILES
-  char datfilename[256];
-  FILE *datfile;
+  char   datfilename[256];
+  FILE   *datfile;
 #endif
+  int    cpos[2];
 } Set_t;
 
-enum   ActiveNames {
-  AOff, AXF, ATc, AZ, ALz, ALc, AX, ADx, ALx, AYF, AMc, AU, ADu, AY, ADy, ALy, AM, ALm, ALast
+typedef struct NumParams_ {
+  Set_t  *Set;
+  int    S;				/* Number of sets */
+  int    LogX, LogY;
+  int    AV;
+  int    VarType;
+  int    AutoExp;
+  int    FitFak;
+  int    Bewert;
+  int    FullFit;
+  int    NumRows;
+  struct Var_ {
+    double x, m, v;
+  } Var[2][ASZ];
+  double Error;
+  char  *Progname;
+  struct Ticks_ {
+    double t0, t1;
+    int    l0, l1;
+  } Ticks[2];
+  struct MinMax_ {
+    double min, minp, minOp, minBp;	/* range of data and */
+    double max,       maxOp; 		/* smallest positive */
+  } XX, YY, VV;
+  double OFmin, OFmax;			/* For fit range */
+  double OXmin, OXmax, OYmin, OYmax; 	/* Drawing range for ortho2() */
+  double Tc_o, X_o, Y_o, M_o;
+  double Ny;
+  double Beta;
+  
+  double Vardummy, d,
+    Xf,  Tc,  Z,  Lz,  Lc,   X,  Dx,  Lx,
+    Yf,  Mc,  U,  Du,   Y,  Dy,  Ly,   M,  Lm;
+} NumParams;
+
+enum ActiveNames {
+  AOff, Ad,
+  AXf,  ATc, AZ, ALz, ALc,  AX, ADx, ALx,
+  AYf,  AMc, AU, ADu,  AY, ADy, ALy,  AM, ALm,
+  ALast
+};
+
+enum RecalcNames {
+  ReNone, ReMa, ReDr, ReWr, ReVa, ReCaBN, ReCa
 };
 
 typedef struct GraphParams_ {
@@ -194,53 +238,15 @@ typedef struct GraphParams_ {
   Int32 XPos,   YPos;
   Int32 PXSize, PYSize;
   Int32 PXPos,  PYPos;
-  char  Xlab[256], Ylab[256];
+  char  Lab[2][256];
+  int   Labi[2];
   Int32 MainW, PlotW;
   int   Swh, FontH, FontD;
-  int   ShiftKey;
+  int   ShiftKey, LeftMouse;
   int   ShowVar;
+  int   Acpos[ALast][2];
+  int   ShowZero;
 } GraphParams;
-
-typedef struct NumParams_ {
-  Set_t  *Set;
-  int    S;				/* Number of sets */
-  int    LogX;
-  int    LogY;
-  int    AV;
-  int    VarType;
-  int    AutoExp;
-  int    Bewert;
-  int    FullFit;
-  int    NumRows;
-  struct Var_ {
-    double x, m, v;
-  } Var[2][ASZ];
-  double Error;
-  char  *Progname;
-  struct Ticks_ {
-    double t0, t1;
-    int    l0, l1;
-  } Ticks[2];
-  double Xmin, XminXp, XminYp;		/* range of data and */
-  double Ymin, YminXp, YminYp;		/* smallest positive */
-  double Vmin, VminXp, VminYp;		/* for variance function */
-  double Xmax, XmaxYp;
-  double Ymax, YmaxXp;
-  double Vmax, VmaxXp;
-  double OFmin, OFmax;			/* For fit range */
-  double OXmin, OXmax, OYmin, OYmax; 	/* Drawing range */
-  double Tc_o;
-  double ExpX_o;
-  double ExpY_o;
-  double ExpM_o;
-  double Ny;
-  double Beta;
-  double Delta;
-
-  double Vardummy;
-  double XFak, Tc, ExpZ, ExpLz, Lc, ExpX, ExpDx, ExpLx;
-  double YFak, Mc, ExpU, ExpDu, ExpY, ExpDy, ExpLy, ExpM, ExpLm;
-} NumParams;
 
 const GraphParams *Gp;
 const NumParams   *Pp;
@@ -306,9 +312,10 @@ void Usage(int verbose) {
 	    "  -y <y>              Preset Exponent y (default: 1)\n"
 	    "  -m <m>              Preset Exponent m (default: 1)\n"
 	    "  -A <i1,i2,...>      Define which variables can be activated using\n"
-	    "                      pad4/pad6 (see below). Use 2,6,13 for Tc,x,y\n"
-	    "                      1:Xsign  2:Tc  3:z  5:Lc  6:x\n"
-	    "                      9:Ysign 10:Mc 11:u 13:y  16:m (default: all)\n"
+	    "                      pad4/pad6 (see below). Use %d,%d,%d for Tc,x,y\n"
+	    "                      %2d:factor d\n"
+	    "                      %2d:Xsign %2d:Tc %2d:z %2d:Lc %2d:x\n"
+	    "                      %2d:Ysign %2d:Mc %2d:u %2d:y  %2d:m (default: all)\n"
 	    "  -4                  Input has 4 columns, 4th is called D by default.\n"
 	    "                      D appears in several exponents of the scaling function\n"
 	    "                      using the numpad keys.\n"
@@ -348,8 +355,8 @@ void Usage(int verbose) {
 	    "  Keys 'n'|'N':       Change exponent ny:     ny -=|+= d (ny   = 1/x)\n"
 	    "  Keys 'b'|'B':       Change exponent beta: beta -=|+= d (beta = y/x)\n"
 	    "\n"
-	    "  middle mouse:       Enable autoscaling (default)\n"
 	    "  left|right mouse:   Zoom in|out and disable autoscaling\n"
+	    "  middle mouse:       Enable autoscaling (default)\n"
 	    "  Keys 'a'|'A':       Enable|disable autoscaling\n"
 	    "  Key 'r':            Reset all values to commandline values\n"
 	    "  Key 'l':            Toggle drawing of lines\n"
@@ -366,8 +373,12 @@ void Usage(int verbose) {
 	    "  Key 'y':            Toggle Y-axis linear/log scale\n"
 	    "  Keys 'q'|Esc:       Quit\n"
 	    "  Keys \"00\"-\"98\":     Activate/deactivate dataset 00-99\n"
-	    "  Keys \"99\":            Activate/deactivate all datasets\n"
-	    , Pp->Progname);
+	    "  Keys \"99\":          Activate/deactivate all datasets\n"
+	    , Pp->Progname,
+	    ATc, AX, AY,
+	    Ad,
+	    AXf, ATc, AZ, ALc, AX,
+	    AYf, AMc, AU, AY, AM);
   exit(1);
 }
 
@@ -389,10 +400,10 @@ void GetArgs(NumParams *p, GraphParams *g, int argc, char *argv[]) {
       break;
       /*case 'n': Ny   = atof(optarg); break;
 	case 'b': Beta = atof(optarg); break;*/
-    case 't': p->Tc_o   = p->Tc   = atof(optarg); break;
-    case 'x': p->ExpX_o = p->ExpX = atof(optarg); break;
-    case 'y': p->ExpY_o = p->ExpY = atof(optarg); break;
-    case 'm': p->ExpM_o = p->ExpM = atof(optarg); break;
+    case 't': p->Tc_o = p->Tc = atof(optarg); break;
+    case 'x': p->X_o  = p->X  = atof(optarg); break;
+    case 'y': p->Y_o  = p->Y  = atof(optarg); break;
+    case 'm': p->M_o  = p->M  = atof(optarg); break;
     case 'v': p->Bewert = g->ShowVar = 1; break;
     case 'N':
       g->Names[0] = strtok(optarg, ",");
@@ -460,13 +471,13 @@ void GetArgs(NumParams *p, GraphParams *g, int argc, char *argv[]) {
   }
   
   /*Beta *= BetaFak;
-    ExpX  = 1.0  / Ny;
-    ExpY  = Beta * ExpX;*/
+    X  = 1.0  / Ny;
+    Y  = Beta * X;*/
 }
 
 void GraphInit(GraphParams *g) {
   int i;
-  Device Devs[] =  {
+  const Device Devs[] =  {
     KEYBD,        INPUTCHANGE,
     UPARROWKEY,   DOWNARROWKEY,
     LEFTARROWKEY, RIGHTARROWKEY,
@@ -474,8 +485,7 @@ void GraphInit(GraphParams *g) {
     LEFTSHIFTKEY, RIGHTSHIFTKEY,
     LEFTMOUSE,    MIDDLEMOUSE,    RIGHTMOUSE,
     MOUSEX,       MOUSEY,
-    PAD1, PAD2, PAD3, PAD4, PAD5,
-    PAD6, PAD7, PAD8, PAD9
+    PAD1, PAD2, PAD3, PAD4, PAD5, PAD6, PAD7, PAD8, PAD9
   };
   
   minsize(g->XSize, g->YSize);
@@ -528,7 +538,7 @@ void ReadData(NumParams *p) {
 	if (L != oldL) { /* New set */
 	  oldL      = L;
 	  p->S++;
-	  p->Set       = (Set_t*) realloc(p->Set, (p->S+1) * sizeof(Set_t));
+	  p->Set    = (Set_t*) realloc(p->Set, (p->S+1) * sizeof(Set_t));
 	  s         = &p->Set[p->S];
 	  s->L      = L;
 	  s->D      = D;
@@ -561,85 +571,67 @@ void ReadData(NumParams *p) {
   }
 }
 
+void SetMinMax(struct MinMax_ *X, double x, double y) {
+  if (                  x < X->min)   X->min   = x;
+  if (                  x > X->max)   X->max   = x;
+  if (x > 0          && x < X->minp)  X->minp  = x;
+  if (         y > 0 && x < X->minOp) X->minOp = x;
+  if (         y > 0 && x > X->maxOp) X->maxOp = x;
+  if (x > 0 && y > 0 && x < X->minBp) X->minBp = x;
+}
+
 void Calculate(NumParams *p) {
   int i, j;
   
-  p->Xmin = p->XminXp = p->XminYp = DBL_MAX;
-  p->Ymin = p->YminXp = p->YminYp = DBL_MAX;
-  p->Xmax = p->XmaxYp = -DBL_MAX;
-  p->Ymax = p->YmaxXp = -DBL_MAX;
+  p->XX.min = p->XX.minp = p->XX.minOp = p->XX.minBp = DBL_MAX;
+  p->XX.max = p->XX.maxOp = -DBL_MAX;
+  
+  p->YY = p->XX;
   
   for (i = 0; i < p->S; i++) if (p->Set[i].active) {
     Set_t *s  = &p->Set[i];
-    double Lx = p->XFak * pow(s->L - p->Lc, p->ExpX + p->ExpDx * s->D) * pow(log(s->L - p->Lc), p->ExpLx);
-    double Ly = p->YFak * pow(s->L - p->Lc, p->ExpY + p->ExpDy * s->D) * pow(log(s->L - p->Lc), p->ExpLy);
+    double Lx = p->Xf * pow(s->L - p->Lc, p->X + p->Dx * s->D) * pow(log(s->L - p->Lc), p->Lx);
+    double Ly = p->Yf * pow(s->L - p->Lc, p->Y + p->Dy * s->D) * pow(log(s->L - p->Lc), p->Ly);
     
     for (j = 0; j < s->N; j++) {
-      Data_t *d = &s->Data[j];
-      d->x = pow(d->T - p->Tc, p->ExpZ) * (p->ExpLz ? pow(log(d->T - p->Tc), p->ExpLz) : 1.0) * Lx;
-      d->y = pow(d->M - p->Mc, p->ExpU + p->ExpDu * s->D) * Ly
-	* pow(d->T - p->Tc, p->ExpM) * (p->ExpLm ? pow(log(d->T - p->Tc), p->ExpLm) : 1.0);
+      const Data_t *ds = &s->Data[j];
+      Data_t *d  = &s->Data[Lx > 0 ? j : s->N - 1 - j];
+      double t = ds->T - p->Tc;
+      
+      d->x = Lx * pow(t, p->Z) * (p->Lz ? pow(log(t), p->Lz) : 1.0);
+      d->y = Ly * pow(t, p->M) * (p->Lm ? pow(log(t), p->Lm) : 1.0)
+	* pow(ds->M - p->Mc, p->U + p->Du * s->D);
       
       if (finite(d->x) && finite(d->y)) {
-	if (            d->x < p->Xmin)   p->Xmin   = d->x;
-	if (d->x > 0 && d->x < p->XminXp) p->XminXp = d->x;
-	if (d->y > 0 && d->x < p->XminYp) p->XminYp = d->x;
-	if (            d->y < p->Ymin)   p->Ymin   = d->y;
-	if (d->x > 0 && d->y < p->YminXp) p->YminXp = d->y;
-	if (d->y > 0 && d->y < p->YminYp) p->YminYp = d->y;
-	if (            d->x > p->Xmax)   p->Xmax   = d->x;
-	if (d->y > 0 && d->x > p->XmaxYp) p->XmaxYp = d->x;
-	if (            d->y > p->Ymax)   p->Ymax   = d->y;
-	if (d->x > 0 && d->y > p->YmaxXp) p->YmaxXp = d->y;
-#if 0
-	fprintf(stderr,
-		"x=%f y=%f Xmin=%f XminXp=%f XminYp=%f "
-		"Ymin=%f YminXp=%f YminYp=%f "
-		"Xmax=%f XmaxYp=%f "
-		"Ymax=%f YmaxXp=%f\n",
-		d->x, d->y,
-		Xmin, XminXp, XminYp,
-		Ymin, YminXp, YminYp,
-		Xmax, XmaxYp,
-		Ymax, YmaxXp);
-#endif
+	SetMinMax(&p->XX, d->x, d->y);
+	SetMinMax(&p->YY, d->y, d->x);
       }
     }
   }
   
 #if 0
   fprintf(stderr,
-	  "Xmin=%g XminXp=%g XminYp=%g\n"
-	  "Ymin=%g YminXp=%g YminYp=%g\n"
-	  "Xmax=%g XmaxYp=%g\n"
-	  "Ymax=%g YmaxXp=%g\n",
-	  Xmin, XminXp, XminYp,
-	  Ymin, YminXp, YminYp,
-	  Xmax, XmaxYp,
-	  Ymax, YmaxXp);
+	  "XX.min=%g XX.minp=%g XX.minOp=%g XX.minBp=%g\n"
+	  "YY.min=%g YY.minp=%g YY.minOp=%g YY.minBp=%g\n"
+	  "XX.max=%g XX.maxOp=%g\n"
+	  "YY.max=%g YY.maxOp=%g\n",
+	  p->XX.min, p->XX.minp, p->XX.minOp, p->XX.minBp,
+	  p->YY.min, p->YY.minp, p->YY.minOp, p->YY.minBp,
+	  p->XX.max, p->XX.maxOp,
+	  p->YY.max, p->YY.maxOp);
 #endif
 }
 
 double Valuate(NumParams *p) {
   int i, j, k, nsvar = 0, npvar = 0;
-  double fmin, fmax, ret = 0.0, svar = 0.0, pvar = 0.0;
+  double fmin = p->LogX ? exp10(p->OFmin) : p->OFmin;
+  double fmax = p->LogX ? exp10(p->OFmax) : p->OFmax;
+  double ret = 0.0, svar = 0.0, pvar = 0.0;
   
-  p->Vmin   = p->Ymin;
-  p->VminXp = p->YminXp;
-  p->VminYp = p->YminYp;
-  p->Vmax   = p->Ymax;
-  p->VmaxXp = p->YmaxXp;
+  p->VV = p->YY;
   
-  fmin = p->OXmin + p->OFmin * (p->OXmax - p->OXmin);
-  fmax = p->OXmin + p->OFmax * (p->OXmax - p->OXmin);
-  
-  if (p->LogX) {
-    fmin = exp10(fmin);
-    fmax = exp10(fmax);
-  }
-  
-  if (p->FullFit || fmin < p->Xmin) fmin = p->Xmin;
-  if (p->FullFit || fmax > p->Xmax) fmax = p->Xmax;
+  if (p->FullFit || fmin < p->XX.min) fmin = p->XX.min;
+  if (p->FullFit || fmax > p->XX.max) fmax = p->XX.max;
   
   p->AV = 1 - p->AV;
   for (i = 0; i < p->S; i++) if (p->Set[i].active) if (!p->Set[i].sorted) {
@@ -654,7 +646,7 @@ double Valuate(NumParams *p) {
     for (k = j = ja = 0; k < ASZ; k++) {
       struct Var_ *var = &p->Var[p->AV][k];
       if (p->LogX) {
-	/*x = exp(log(XminXp) + k * (log(Xmax / XminXp)) / ASZ);*/
+	/*x = exp(log(XX.minXp) + k * (log(XX.max / XX.minXp)) / ASZ);*/
 	var->x = fmin * pow(fmax / fmin, (double)k / ASZ);
       } else {
 	var->x = fmin + k * (fmax - fmin) / ASZ;
@@ -709,7 +701,7 @@ double Valuate(NumParams *p) {
       var->m /= m;
       var->v /= m;
       var->v  = var->v - SQR(var->m);
-      var->v /= SQR(var->m); /* Relative variance */
+      if (p->VarType < 2) var->v /= SQR(var->m); /* Relative variance */
       
       svar += var->v;
       nsvar++;
@@ -723,26 +715,20 @@ double Valuate(NumParams *p) {
 #ifdef DEBUG
     printf("%g (%g,%g)\n", p->Var[AV][k].x, p->Var[AV][k].m, p->Var[AV][k].v);
 #endif
-    {
-      double x, y;
-      x = var->x;
-      y = var->v;
-      if (finite(x) && finite(y)) {
-	if (y > 0 && y < 1e-8)   y      = 1e-8;
-	if (         y < p->Vmin)   p->Vmin   = y;
-	if (x > 0 && y < p->VminXp) p->VminXp = y;
-	if (y > 0 && y < p->VminYp) p->VminYp = y;
-	if (         y > p->Vmax)   p->Vmax   = y;
-	if (x > 0 && y > p->VmaxXp) p->VmaxXp = y;
-      }
+    if (finite(var->x) && finite(var->v)) {
+      double v = var->v;
+      if (v > 0 && v < 1e-8) v = 1e-8;
+      SetMinMax(&p->VV, v, var->x);
     }
   }
   /*printf("var = %g, lvar = %g varp = %g lvarp = %g\n",
     var / ASZ, lvar / ASZ, varp / ASZ, lvarp / ASZ);*/
   
   switch(p->VarType) {
-  case 0: if (nsvar) ret = svar / nsvar; break;
-  case 1: if (npvar) ret = exp(pvar / npvar); break;
+  case 0:
+  case 2: if (nsvar) ret = svar / nsvar; break;
+  case 1:
+  case 3: if (npvar) ret = exp(pvar / npvar); break;
   default:
     fprintf(stderr, "Unknown VarType %d, should not happen\n",
 	    p->VarType);
@@ -811,16 +797,11 @@ void CalcTicks(struct Ticks_* t, int Log, double d) {
 #endif
   }
 #if 0
-  fprintf(stderr, "%g  %g %g %d %d\n",
-	  l10, 
-	  t->t0,
-	  t->t1,
-	  t->l0, t->l1);
+  fprintf(stderr, "%g  %g %g %d %d\n", l10, t->t0, t->t1, t->l0, t->l1);
 #endif
-
 }
 
-int charstrC(char *ctext) {
+int charstrC(const char *ctext) {
   /* charstr with buildin color sequences
    * returns strwidth of written string */
   char *text = strdup(ctext);
@@ -830,7 +811,7 @@ int charstrC(char *ctext) {
   Cols[1] = ACOLOR;
   Cols[2] = Gp->Colors[2];
   Cols[3] = RED;
- n = strlen(text);
+  n = strlen(text);
   
   for (i = 0; i < n; i++) if (text[i] == '#') {
     text[i] = '\0';
@@ -845,23 +826,98 @@ int charstrC(char *ctext) {
   return cx;
 }
 
-void charstrH(char *text, int h) {
-  Screencoord cx, cy;
+int charstrH(const char *text, int h) {
+  Screencoord cx, cy, r;
   getcpos(&cx, &cy);
   cx -= Gp->XPos; cy -= Gp->YPos;
   cmov2i(cx, cy + h);
-  cx += charstrC(text);
-  cmov2i(cx, cy);
+  r = charstrC(text);
+  cmov2i(cx + r, cy);
+  return r;
 }    
 
+#define CI(a) ((a != AOff) * ((g->Active == (a)) + 2 * (p->AutoExp == (a))))
+
+void WriteTerm(const NumParams *p, GraphParams *g,
+	       const char *func, int alc, int alc0,
+	       int ax, int adx, int xy, int*pos) {
+  const double *Vars = &p->Vardummy;
+  int all = g->ShowZero;
+  
+  /* * f(L - Lc) */
+  if (all || Vars[ax]||CI(ax) || Vars[adx]||CI(adx) || (CI(alc) && alc0)) {
+    int times = g->Labi[xy] > 1 || (g->Labi[xy] == 1 && g->Lab[xy][0] != '-');
+    char text[256], lmlc[80];
+    const char *name;
+    
+    switch (alc) {
+    case ALc: name = g->Names[0]; break;
+    case ATc: name = g->Names[1]; break;
+    case AMc: name = g->Names[2]; break;
+    default: exit(22);
+    }
+    
+    if (Vars[alc] || ((all || CI(alc)) && alc0)) {
+      sprintf(lmlc, "%s(%s#%c%+g#0)",
+	      func ? func : "", name, CI(alc) + '0', -Vars[alc]);
+      sprintf(text, "%s%s", times ? " * " : "", lmlc);
+      g->Acpos[CI(alc) ? ax : alc][0] = *pos;
+      *pos += charstrC(text);
+      g->Acpos[CI(alc) ? ax : alc][1] = *pos;
+    } else {
+      sprintf(lmlc, func ? "%s(%s)" : "%s%s", func ? func : "", name);
+      sprintf(text, "%s%s", times ? " * " : "", lmlc);
+      g->Acpos[CI(ax) ? alc : ax][0] = *pos; /* might be reset below */
+      *pos += charstrC(text);
+      g->Acpos[CI(ax) ? alc : ax][1] = *pos;
+    }
+    
+    g->Labi[xy] += sprintf(g->Lab[xy] + g->Labi[xy], "%s%s%s",
+			   times ? " * " : "",
+			   func ? "\\" : "",
+			   lmlc);
+    
+    /* ^(x + Dy D) */
+    switch(2 * (all || Vars[ax]||CI(ax) || CI(alc)) + (Vars[adx]||CI(adx))) {
+    case 3: /* Both */
+      sprintf(text, "(#%c%g#%c%+g#0*%s)",
+	      CI(ax ) + '0', Vars[ax],
+	      CI(adx) + '0', Vars[adx],
+	      g->Names[3]);
+      *pos += charstrH(text, g->FontH/2);
+      g->Labi[xy] += sprintf(g->Lab[xy] + g->Labi[xy],
+			     "\\S%g%+g %s\\N",
+			     Vars[ax], Vars[adx], g->Names[3]);
+      break;
+    case 2: /* X */
+      if (all || Vars[ax] != 1.0 || CI(ax)) {
+	sprintf(text, "#%c%g#0", CI(ax) + '0', Vars[ax]);
+	g->Acpos[ax][0] = *pos;
+	*pos += charstrH(text, g->FontH/2);
+	g->Acpos[ax][1] = *pos;
+	g->Labi[xy] += sprintf(g->Lab[xy] + g->Labi[xy], "\\S%g\\N", Vars[ax]);
+      }
+      break;
+    case 1: /* Dx */
+      sprintf(text, "#%c%g#0*%s", CI(adx) + '0', Vars[adx], g->Names[3]);
+      *pos += charstrH(text, g->FontH/2);
+      g->Labi[xy] += sprintf(g->Lab[xy] + g->Labi[xy],
+			     "\\S%g %s\\N",
+			     Vars[adx], g->Names[3]);
+      break;
+    }
+  }
+}
+
 void DrawMain(const NumParams *p, GraphParams *g) {
-  int ncx, ncy, i;
-  char lmlc[80], tmtc[80], mmmc[80], text[256];
-  char logtmtc[80], loglmlc[80];
+  int i, pos;
+  char text[256];
   
   winset(g->MainW);
   color(g->BgColor);
   clear();
+  
+  memset(g->Acpos, 0, sizeof(g->Acpos));
   
   if (g->Active) {
     sprintf(text, "%d", g->Active);
@@ -878,205 +934,56 @@ void DrawMain(const NumParams *p, GraphParams *g) {
   }
   
   color(g->FgColor);
-  cmov2(FRAME, 2 * g->FontH + g->FontD);
+  cmov2(pos = FRAME, 2 * g->FontH + g->FontD);
   
-  g->Xlab[0] = g->Ylab[0] = '\0';
-  ncx = ncy = 0;
-#define CI(a) ((g->Active == (a)) + 2 * (p->AutoExp == (a)))  
-  sprintf(lmlc, p->Lc || CI(ALc) ? "(%s#%c%+g#0)" : "%s",
-	  g->Names[0], CI(ALc) + '0', -p->Lc);
-  sprintf(tmtc, p->Tc || CI(ATc) ? "(%s#%c%+g#0)" : "%s",
-	  g->Names[1], CI(ATc) + '0', -p->Tc);
-  sprintf(mmmc, p->Mc || CI(AMc) ? "(%s#%c%+g#0)" : "%s",
-	  g->Names[2], CI(AMc) + '0', -p->Mc);
   
-  sprintf(logtmtc, "log%s%s%s", p->Tc ? "" : "(", tmtc, p->Tc ? "" : ")");
-  sprintf(loglmlc, "log%s%s%s", p->Lc ? "" : "(", lmlc, p->Lc ? "" : ")");
+  sprintf(text, "d = #%c%g#0", CI(Ad) + '0', p->d);
   
-  sprintf(text, "d = %g; X = #%c%s#0%s", p->Delta, CI(AXF) + '0',
-	  p->XFak < 0.0 ? "-" : CI(AXF) ? "+" : "", tmtc);
-  /* (T - Tc) */
-  charstrC(text);
-  ncx += sprintf(g->Xlab + ncx, "%s%s", p->XFak == 1.0 ? "" : "-", tmtc);
+  g->Acpos[Ad][0] = pos;
+  pos += charstrC(text);
+  g->Acpos[Ad][1] = pos;
   
-  /* ^z */
-  if (p->ExpZ != 1.0 || CI(AZ)) {
-    sprintf(text, "#%c%g#0", CI(AZ) + '0', p->ExpZ);
-    charstrH(text, g->FontH/2);
-    ncx += sprintf(g->Xlab + ncx, "\\S%g\\N", p->ExpZ);
-  }
+  sprintf(text, "; X = #%c%s#0", CI(AXf) + '0',
+	  p->Xf < 0.0 ? "-" : CI(AXf) ? "+" : "");
+  pos += charstrC(text);
+  g->Labi[0] = sprintf(g->Lab[0], "%s", p->Xf == 1.0 ? "" : "-");
   
-  /* * log(T - Tc) */
-  if (p->ExpLz || CI(ALz)) {
-    sprintf(text, " * %s", logtmtc);
-    charstrC(text);
-    ncy += sprintf(g->Ylab + ncy, " * \\%s", logtmtc);
-    
-    /* ^ExpLz */
-    if (p->ExpLz != 1.0 || CI(ALz)) {
-      sprintf(text, "#%c%g#0", CI(ALz) + '0', p->ExpLz);
-      charstrH(text, g->FontH/2);
-      ncy += sprintf(g->Ylab + ncy, "\\S%g\\N", p->ExpLz);
-    }
-  }
+  /* (T - Tc)^Z */
+  WriteTerm(p, g, NULL,  ATc, 1, AZ,  AOff, 0, &pos);
+  /* log(T - Tc)^Lz */
+  WriteTerm(p, g, "log", ATc, 0, ALz, AOff, 0, &pos);
+  /* (L - Lc)^(X + Dx * D) */
+  WriteTerm(p, g, NULL,  ALc, 1, AX,  ADx,  0, &pos);
+  /* log(L - Lc)^Lx */
+  WriteTerm(p, g, "log", ALc, 0, ALx, AOff, 0, &pos);
   
-  /* * (L - Lc) */
-  if (p->ExpX || p->ExpDx || CI(ALc) || CI(AX) || CI(ADx)) {
-    charstrC(" * ");
-    charstrC(lmlc);
-    ncx += sprintf(g->Xlab + ncx, " * %s", lmlc);
-    
-    /* ^(x + Dy D) */
-    switch(2 * (p->ExpX || CI(AX) || CI(ALc)) + (p->ExpDx || CI(ADx))) {
-    case 3: /* Both */
-      sprintf(text, "(#%c%g#%c%+g#0*%s)",
-	      CI(AX ) + '0', p->ExpX,
-	      CI(ADx) + '0', p->ExpDx,
-	      g->Names[3]);
-      charstrH(text, g->FontH/2);
-      ncx += sprintf(g->Xlab + ncx, "\\S%g%+g %s\\N", p->ExpX, p->ExpDx, g->Names[3]);
-      break;
-    case 2: /* X */
-      if (p->ExpX != 1.0 || CI(AX)) {
-	sprintf(text, "#%c%g#0", CI(AX) + '0', p->ExpX);
-	charstrH(text, g->FontH/2);
-	ncx += sprintf(g->Xlab + ncx, "\\S%g\\N", p->ExpX);
-      }
-      break;
-    case 1: /* Dx */
-      sprintf(text, "#%c%g#0*%s", CI(ADx) + '0', p->ExpDx, g->Names[3]);
-      charstrH(text, g->FontH/2);
-      ncx += sprintf(g->Xlab + ncx, "\\S%g %s\\N", p->ExpDx, g->Names[3]);
-      break;
-    }
-  }
+  sprintf(text, "; Y = #%c%s#0", CI(AYf) + '0',
+	  p->Yf < 0.0 ? "-" : CI(AYf) ? "+" : "");
+  pos += charstrC(text);
+  g->Labi[1] = sprintf(g->Lab[1], "%s", p->Yf == 1.0 ? "" : "-");
   
-  /* * log(L - Lc) */
-  if (p->ExpLx || CI(ALx)) {
-    sprintf(text, " * %s", loglmlc);
-    charstrC(text);
-    ncx += sprintf(g->Xlab + ncx, " * \\%s", loglmlc);
-    
-    /* ^ExpLx */
-    if (p->ExpLx != 1.0 || CI(ALx)) {
-      sprintf(text, "#%c%g#0", CI(ALx) + '0', p->ExpLx);
-      charstrH(text, g->FontH/2);
-      ncx += sprintf(g->Xlab + ncx, "\\S%g\\N", p->ExpLx);
-    }
-  }
+  /* (M - Mc)^(U + Du * D) */
+  WriteTerm(p, g, NULL,  AMc, 1, AU,  ADu,  1, &pos);
+  /* (L - Lc)^(Y + Dy * D) */
+  WriteTerm(p, g, NULL,  ALc, 0, AY,  ADy,  1, &pos);
+  /* log(L - Lc)^Ly */
+  WriteTerm(p, g, "log", ALc, 0, ALy, AOff, 1, &pos);
+  /* (T - Tc)^M */
+  WriteTerm(p, g, NULL,  ATc, 0, AM,  AOff, 1, &pos);
+  /* log(T - Tc)^Lm */
+  WriteTerm(p, g, "log", ATc, 0, ALm, AOff, 1, &pos);
   
-  sprintf(text, "; Y = #%c%s#0%s", CI(AYF) + '0',
-	  p->YFak < 0.0 ? "-" : CI(AYF) ? "+" : "", mmmc);
-  /* (M - Mc) */
-  charstrC(text);
   
-  ncy += sprintf(g->Ylab + ncy, "%s%s", p->YFak == 1.0 ? "" : "-", mmmc);
-  
-  /* ^(u + Du D) */
-  switch(2 * (p->ExpU || CI(AU) || CI(AMc)) + (p->ExpDu || CI(ADu))) {
-  case 3: /* Both */
-    sprintf(text, "(#%c%g#%c%+g#0*%s)",
-	    CI(AU ) + '0', p->ExpU,
-	    CI(ADu) + '0', p->ExpDu,
-	    g->Names[3]);
-    charstrH(text, g->FontH/2);
-    ncy += sprintf(g->Ylab + ncy, "\\S%g%+g %s\\N", p->ExpU, p->ExpDu, g->Names[3]);
-    break;
-  case 2: /* U */
-    if (p->ExpU != 1.0 || CI(AU)) {
-      sprintf(text, "#%c%g#0", CI(AU) + '0', p->ExpU);
-      charstrH(text, g->FontH/2);
-      ncy += sprintf(g->Ylab + ncy, "\\S%g\\N", p->ExpU);
-    }
-    break;
-  case 1: /* Du */
-    sprintf(text, "#%c%g#0*%s", CI(ADu) + '0', p->ExpDu, g->Names[3]);
-    charstrH(text, g->FontH/2);
-    ncy += sprintf(g->Ylab + ncy, "\\S%g %s\\N", p->ExpDu, g->Names[3]);
-    break;
-  }
-  /* * (L - Lc) */
-  if (p->ExpY || p->ExpDy || CI(AY) || CI(ADy)) {
-    charstrC(" * ");
-    charstrC(lmlc);
-    ncy += sprintf(g->Ylab + ncy, " * %s", lmlc);
-    
-    /* ^(y + Dy D) */
-    switch(2 * (p->ExpY || CI(AY)) + (p->ExpDy || CI(ADy))) {
-    case 3: /* Both */
-      sprintf(text, "(#%c%g#%c%+g#0*%s)",
-	      CI(AY ) + '0', p->ExpY,
-	      CI(ADy) + '0', p->ExpDy,
-	      g->Names[3]);
-      charstrH(text, g->FontH/2);
-      ncy += sprintf(g->Ylab + ncy, "\\S%g%+g %s\\N", p->ExpY, p->ExpDy, g->Names[3]);
-      break;
-    case 2: /* Y */
-      if (p->ExpY != 1.0 || CI(AY)) {
-	sprintf(text, "#%c%g#0", CI(AY) + '0', p->ExpY);
-	charstrH(text, g->FontH/2);
-	ncy += sprintf(g->Ylab + ncy, "\\S%g\\N", p->ExpY);
-      }
-      break;
-    case 1: /* Dy */
-      sprintf(text, "#%c%g#0*%s", CI(ADy) + '0', p->ExpDy, g->Names[3]);
-      charstrH(text, g->FontH/2);
-      ncy += sprintf(g->Ylab + ncy, "\\S%g %s\\N", p->ExpDy, g->Names[3]);
-      break;
-    }
-  }
-  
-  /* * log(L - Lc) */
-  if (p->ExpLy || CI(ALy)) {
-    sprintf(text, " * %s", loglmlc);
-    charstrC(text);
-    ncy += sprintf(g->Ylab + ncy, " * \\%s", loglmlc);
-    
-    /* ^ExpLy */
-    if (p->ExpLy != 1.0 || CI(ALy)) {
-      sprintf(text, "#%c%g#0", CI(ALy) + '0', p->ExpLy);
-      charstrH(text, g->FontH/2);
-      ncy += sprintf(g->Ylab + ncy, "\\S%g\\N", p->ExpLy);
-    }
-  }
-  
-  /* * (T - Tc) */
-  if (p->ExpM || CI(AM)) {
-    charstrC(" * ");
-    charstrC(tmtc);
-    ncy += sprintf(g->Ylab + ncy, " * %s", tmtc);
-    
-    /* ^m */
-    if (p->ExpM != 1.0 || CI(AM)) {
-      sprintf(text, "#%c%g#0", CI(AM) + '0', p->ExpM);
-      charstrH(text, g->FontH/2);
-      ncy += sprintf(g->Ylab + ncy, "\\S%g\\N", p->ExpM);
-    }
-  }
-  
-  /* * log(T - Tc) */
-  if (p->ExpLm || CI(ALm)) {
-    sprintf(text, " * %s", logtmtc);
-    charstrC(text);
-    ncy += sprintf(g->Ylab + ncy, " * \\%s", logtmtc);
-    
-    /* ^ExpLm */
-    if (p->ExpLm != 1.0 || CI(ALm)) {
-      sprintf(text, "#%c%g#0", CI(ALm) + '0', p->ExpLm);
-      charstrH(text, g->FontH/2);
-      ncy += sprintf(g->Ylab + ncy, "\\S%g\\N", p->ExpLm);
-    }
-  }
-  
-  cmov2(FRAME, g->FontH + g->FontD);
+  cmov2(pos = FRAME, g->FontH + g->FontD);
   sprintf(text, "%s =", g->Names[0]);
-  charstr(text);
-  
+  pos += charstrC(text);
   for (i = 0; i < p->S; i++) {
-    Set_t *s  = &p->Set[i];
+    Set_t *s = &p->Set[i];
+    s->cpos[0] = pos;
     color(s->color);
     sprintf(text, s->active ? " %.4g" : " (%.4g)", s->L);
-    charstr(text);
+    pos += charstrC(text);
+    s->cpos[1] = pos;
   }  
   
   sleep(0);
@@ -1105,14 +1012,34 @@ void checked_v2d(const NumParams *p, double x0, double x1, double dm[2][2]) {
 
 void AutoScale(NumParams *p) {
   double dx, dy;
-  p->OXmin = p->LogX ? log10(p->XminXp) : p->LogY ? p->XminYp : p->Xmin;
-  p->OYmin = p->LogY ? log10(p->YminYp) : p->LogX ? p->YminXp : p->Ymin;
-  p->OXmax = p->LogY ? p->XmaxYp : p->Xmax; if (p->LogX) p->OXmax = log10(p->OXmax);
-  p->OYmax = p->LogX ? p->YmaxXp : p->Ymax; if (p->LogY) p->OYmax = log10(p->OYmax);
+  struct MinMax_ *x = &p->XX;
+  struct MinMax_ *y = Gp->ShowVar ? &p->VV : &p->YY;
   
-  if (Gp->ShowVar) {
-    p->OYmin = p->LogY ? log10(p->VminYp) : p->LogX ? p->VminXp : p->Vmin;
-    p->OYmax = p->LogX ? p->VmaxXp : p->Vmax; if (p->LogY) p->OYmax = log10(p->OYmax);
+  switch (2 * p->LogX + p->LogY) {
+  case 0:
+    p->OXmin = x->min;
+    p->OXmax = x->max;
+    p->OYmin = y->min;
+    p->OYmax = y->max;
+    break;
+  case 1: /* LogY */
+    p->OXmin = x->minOp;
+    p->OXmax = x->maxOp;
+    p->OYmin = log10(y->minp);
+    p->OYmax = log10(y->max);
+    break;
+  case 2: /* LogX */
+    p->OXmin = log10(x->minp);
+    p->OXmax = log10(x->max);
+    p->OYmin = y->minOp;
+    p->OYmax = y->maxOp;
+    break;
+  case 3: /* LogX && LogY */
+    p->OXmin = log10(x->minBp);
+    p->OXmax = log10(x->maxOp);
+    p->OYmin = log10(y->minBp);
+    p->OYmax = log10(y->maxOp);
+    break;
   }
   
   dx = p->OXmax - p->OXmin;
@@ -1198,13 +1125,10 @@ void DrawPlot(NumParams *p) {
   }
   
   if (!p->FullFit) {
-    double fmin, fmax;
     color(RED);
     setlinestyle(2);
-    fmin = p->OXmin + p->OFmin * (p->OXmax - p->OXmin);
-    fmax = p->OXmin + p->OFmax * (p->OXmax - p->OXmin);
-    move2(fmin, p->OYmin); draw2(fmin, p->OYmax);
-    move2(fmax, p->OYmin); draw2(fmax, p->OYmax);
+    move2(p->OFmin, p->OYmin); draw2(p->OFmin, p->OYmax);
+    move2(p->OFmax, p->OYmin); draw2(p->OFmax, p->OYmax);
     setlinestyle(0);
   }
   
@@ -1220,7 +1144,7 @@ void DrawPlot(NumParams *p) {
     bgnenddraw(0);
 #ifdef SHOWFIT
     for (k = 0; k < ASZ; k++) {
-      checked_v2d(p, p->Var[AV][k].x, p->Set[i].Fit[k], dm);
+      checked_v2d(p, p->Var[p->AV][k].x, p->Set[i].Fit[k], dm);
     }
     bgnenddraw(0);
 #endif
@@ -1238,7 +1162,7 @@ void DrawPlot(NumParams *p) {
     
     /* Draw old and new variance */
     for (i = 0, av = 1 - p->AV; i < 2; i++) {
-      if (p->AutoExp) { /* don't draw old with AutoExp running */
+      if (1 || p->AutoExp) { /* don't draw old with AutoExp running */
 	i++;
 	av = p->AV;
       }
@@ -1280,7 +1204,8 @@ void ShowPos(const NumParams *p, const GraphParams *g, Int16 mx, Int16 my, Int16
   }
 }
 
-int Selector(double*xmin, double*xmax, double*ymin, double*ymax, int col) {
+int Selector(double*xmin, double*xmax, double*ymin, double*ymax,
+	     int col, Int16*mxp, Int16*myp) {
   Int32 ox, oy;
   Int32 sx, sy;
   Int16 mx, my;
@@ -1302,8 +1227,12 @@ int Selector(double*xmin, double*xmax, double*ymin, double*ymax, int col) {
   ob = (-1.0-M[3][1]) / M[1][1];
   ot = ( 1.0-M[3][1]) / M[1][1];
   
-  qread(&mx); mx -= ox;
-  qread(&my); my -= oy;
+  qread(&mx); qread(&my);
+  
+  if (mxp) *mxp = mx;
+  if (myp) *myp = my;
+  
+  mx -= ox; my -= oy;
   
   if (mx < vl || mx > vr || my < vb || my > vt) return 0; /* Not in viewport */
   
@@ -1356,21 +1285,73 @@ int Selector(double*xmin, double*xmax, double*ymin, double*ymax, int col) {
   return 1;
 }
 
+int ChangeActive(NumParams *p, const GraphParams *g, double delta) {
+  double *Vars = &p->Vardummy;
+  int ret = ReCa;
+  switch (g->Active) {
+  case AOff:
+    ret = ReNone;
+    break;
+  case Ad:
+    p->d *= delta > 0 ? 10.0 : 0.1;
+    ret = p->AutoExp ? ReCa : ReMa;
+    break;
+  case AXf:
+  case AYf:
+    Vars[g->Active] = delta > 0 ? 1.0 : -1.0;
+    break;
+  default:
+    Vars[g->Active] += delta;
+    INTCHECK(Vars[g->Active]);
+    break;
+  }
+  return ret;
+}
+
+int Fit(NumParams *p) {
+  double oerr  = p->Error; /* Error should be set */
+  double *Vars = &p->Vardummy;
+  int todo = ReMa;
+  
+  Vars[p->AutoExp]
+    = floor(Vars[p->AutoExp] / p->d + 0.5) * p->d + p->FitFak * p->d;
+  INTCHECK(Vars[p->AutoExp]);
+  Calculate(p);
+  p->Error = Valuate(p);
+  
+  if (p->Error >= oerr) {
+    /* undo change and go on in opposite direction */
+    Vars[p->AutoExp] -= p->FitFak * p->d;
+    INTCHECK(Vars[p->AutoExp]);
+    switch (p->FitFak) {
+    case 1:
+      p->Error  = oerr;
+      p->FitFak = -1;
+      break;
+    case -1:
+      /* found */
+      p->FitFak = 0;
+      Calculate(p);
+      p->Error  = Valuate(p);
+      todo      = ReWr;
+    }
+  }
+  return todo;
+}
+
 void ProcessQueue(NumParams *p, GraphParams *g) {
   Int32 dev = 4711;
   Int16 val;
-  enum RecalcNames {
-    ReNone, ReMa, ReDr, ReWr, ReVa, ReCaBN, ReCa
-  };
   int todo = ReNone;
   static Int16 mx = 0, my = 0, showpos = 1;
-  static int fitfak = 0;
+  int Mmx = 0, Mmy = 0;
   static int rewrite = 1;
   static int activei = 0;
   double fak = 0.0;
-  double *Variables = &p->Vardummy;
+  double old_OFmin = (p->OFmin - p->OXmin) / (p->OXmax - p->OXmin);
+  double old_OFmax = (p->OFmax - p->OXmin) / (p->OXmax - p->OXmin);
   
-  if (fitfak == 0 || qtest())
+  if (p->FitFak == 0 || qtest())
     dev = qread(&val);
   
 #if 0
@@ -1399,6 +1380,9 @@ void ProcessQueue(NumParams *p, GraphParams *g) {
     if (qtest() == MOUSEY) break;
     goto show;
   case MOUSEY:
+    if (g->LeftMouse) if (val % 4 == 0) {
+      todo = ChangeActive(p, g, (val - my) * p->d);
+    }
     my = val;
   show:
     ShowPos(p, g, mx, my, showpos);
@@ -1407,43 +1391,77 @@ void ProcessQueue(NumParams *p, GraphParams *g) {
   case RIGHTSHIFTKEY:
     g->ShiftKey = val;
     break;
+  case LEFTMOUSE:
+    g->LeftMouse = val;
+    break;
+  }
+  
+  Mmx = mx - g->XPos;
+  Mmy = my - g->YPos;
+  if (g->ShiftKey && Mmx > 0 && Mmx < g->XSize &&
+      Mmy > 2 * g->FontH && Mmy < 4 * g->FontH) {
+    /*printf("%d %d\n", Mmx, Mmy);*/
+    if (!g->ShowZero) todo = ReMa;
+    g->ShowZero = 1;
+  } else {
+    if (g->ShowZero) todo = ReMa;
+    g->ShowZero = 0;
   }
   
   /* For all others, ignore val == 0 (key/buttonrelease) */
   if (val) switch (dev) {
+    double xmin, xmax, ymin, ymax;
+    int r;
   case LEFTMOUSE:
     winset(g->PlotW);
-    switch (g->ShiftKey) {
-      double fmin, fmax;
-    case 0:
-      fmin = p->OXmin + p->OFmin * (p->OXmax - p->OXmin);
-      fmax = p->OXmin + p->OFmax * (p->OXmax - p->OXmin);
-      if (Selector(&p->OXmin, &p->OXmax, &p->OYmin, &p->OYmax, GREEN)) {
-	p->OFmin = (fmin - p->OXmin) / (p->OXmax - p->OXmin);
-	p->OFmax = (fmax - p->OXmin) / (p->OXmax - p->OXmin);
+    r = Selector(&xmin, &xmax, &ymin, &ymax,
+		 g->ShiftKey ? YELLOW : GREEN, &mx, &my);
+    /* Selector() eats events, restore state variables... */
+    g->ShiftKey  = getbutton(LEFTSHIFTKEY) || getbutton(RIGHTSHIFTKEY);
+    g->LeftMouse = getbutton(LEFTMOUSE);
+    if (r) { /* valid selection done */
+      switch (g->ShiftKey) {
+      case 0:
+	p->OXmin = xmin; p->OXmax = xmax;
+	p->OYmin = ymin; p->OYmax = ymax;
 	g->AutoScale = 0;
 	todo = ReWr;
+	break;
+      case 1:
+	p->OFmin = xmin; p->OFmax = xmax;
+	p->FullFit = 0;
+	todo = ReVa;
+	break;
       }
-      break;
-    case 1:
-      if (Selector(&fmin, &fmax, NULL, NULL, YELLOW)) {
-	  p->OFmin = (fmin - p->OXmin) / (p->OXmax - p->OXmin);
-	  p->OFmax = (fmax - p->OXmin) / (p->OXmax - p->OXmin);
-	  p->FullFit = 0;
-	  todo = ReCa;
+    } else {
+      Mmx = mx - g->XPos;
+      Mmy = my - g->YPos;
+      switch (Mmy / g->FontH) {
+	int i;
+      case 1:
+	for (i = 0; i < p->S; i++)
+	  if (Mmx >= p->Set[i].cpos[0] && Mmx <= p->Set[i].cpos[1]) {
+	    p->Set[i].active ^= 1;
+	    todo = ReCa;
+	  }
+	break;
+      case 2:
+      case 3:
+	for (i = 0; i < ALast; i++)
+	  if (Mmx >= g->Acpos[i][0] && Mmx <= g->Acpos[i][1]) {
+	    g->Active = i;
+	    for (activei = g->NumActive - 1;
+		 activei > 0 && g->Active != g->Actives[activei];
+		 activei--);
+	    todo      = ReMa;
+	    rewrite   = 1;
+	  }
       }
-      break;
     }
     break;
   case MIDDLEMOUSE:
     switch (g->ShiftKey) {
-      double fmin, fmax;
     case 0:
-      fmin = p->OXmin + p->OFmin * (p->OXmax - p->OXmin);
-      fmax = p->OXmin + p->OFmax * (p->OXmax - p->OXmin);
-      AutoScale(p);
-      p->OFmin = (fmin - p->OXmin) / (p->OXmax - p->OXmin);
-      p->OFmax = (fmax - p->OXmin) / (p->OXmax - p->OXmin);
       g->AutoScale = 1;
       todo = ReWr;
       break;
@@ -1455,20 +1473,16 @@ void ProcessQueue(NumParams *p, GraphParams *g) {
     break;
   case RIGHTMOUSE:
     {
-      double xc, yc, xd, yd, fmin, fmax;
-      xc   = (p->OXmax + p->OXmin) / 2;
-      yc   = (p->OYmax + p->OYmin) / 2;
-      xd   = p->OXmax - p->OXmin;
-      yd   = p->OYmax - p->OYmin;
-      fmin = p->OXmin + p->OFmin * (p->OXmax - p->OXmin);
-      fmax = p->OXmin + p->OFmax * (p->OXmax - p->OXmin);
+      double xc, yc, xd, yd;
+      xc = (p->OXmax + p->OXmin) / 2;
+      yc = (p->OYmax + p->OYmin) / 2;
+      xd =  p->OXmax - p->OXmin;
+      yd =  p->OYmax - p->OYmin;
 #define ZOOMOUT 0.6
       p->OXmin = xc - ZOOMOUT * xd;
       p->OXmax = xc + ZOOMOUT * xd;
       p->OYmin = yc - ZOOMOUT * yd;
       p->OYmax = yc + ZOOMOUT * yd;
-      p->OFmin = (fmin - p->OXmin) / (p->OXmax - p->OXmin);
-      p->OFmax = (fmax - p->OXmin) / (p->OXmax - p->OXmin);
       g->AutoScale = 0;
       todo = ReWr;
     }
@@ -1497,42 +1511,42 @@ void ProcessQueue(NumParams *p, GraphParams *g) {
 #endif
     todo = ReDr;
     break;
-  case  DOWNARROWKEY: p->ExpY -= p->Delta; INTCHECK(p->ExpY); todo = ReCa; break;
-  case    UPARROWKEY: p->ExpY += p->Delta; INTCHECK(p->ExpY); todo = ReCa; break;
-  case  LEFTARROWKEY: p->ExpX -= p->Delta; INTCHECK(p->ExpX); todo = ReCa; break;
-  case RIGHTARROWKEY: p->ExpX += p->Delta; INTCHECK(p->ExpX); todo = ReCa; break;
-  case     PAGEUPKEY: p->ExpM += p->Delta; INTCHECK(p->ExpM); todo = ReCa; break;
-  case   PAGEDOWNKEY: p->ExpM -= p->Delta; INTCHECK(p->ExpM); todo = ReCa; break;
+  case  DOWNARROWKEY: p->Y -= p->d; INTCHECK(p->Y); todo = ReCa; break;
+  case    UPARROWKEY: p->Y += p->d; INTCHECK(p->Y); todo = ReCa; break;
+  case  LEFTARROWKEY: p->X -= p->d; INTCHECK(p->X); todo = ReCa; break;
+  case RIGHTARROWKEY: p->X += p->d; INTCHECK(p->X); todo = ReCa; break;
+  case     PAGEUPKEY: p->M += p->d; INTCHECK(p->M); todo = ReCa; break;
+  case   PAGEDOWNKEY: p->M -= p->d; INTCHECK(p->M); todo = ReCa; break;
   case PAD4:
     activei += g->NumActive - 2;
   case PAD6:
     activei = (activei + 1) % g->NumActive;
-    g->Active  = g->Actives[activei];
+    g->Active = g->Actives[activei];
     todo    = ReMa;
     rewrite = 1;
     break;
   case PAD5:
     if (p->AutoExp == g->Active) {
       p->AutoExp = AOff;
-      todo    = ReMa;
+      todo    = ReCa;
       rewrite = 1;
-    } else if (g->Active != AXF && g->Active != AYF) {
+    } else switch (g->Active) {
+    case Ad:
+    case AXf:
+    case AYf:
+      break;
+    default:
       p->AutoExp = g->Active;
       todo = ReCa;
     }
     break;
-  case PAD1: if (fak == 0) fak =  -10 * p->Delta;
-  case PAD2: if (fak == 0) fak =       -p->Delta;
-  case PAD3: if (fak == 0) fak = -0.1 * p->Delta;
-  case PAD7: if (fak == 0) fak =   10 * p->Delta;
-  case PAD8: if (fak == 0) fak =        p->Delta;
-  case PAD9: if (fak == 0) fak =  0.1 * p->Delta;
-    if (g->Active == AXF || g->Active == AYF)
-      Variables[g->Active] = fak > 0 ? 1.0 : -1.0;
-    else
-      Variables[g->Active] += fak;
-    INTCHECK(Variables[g->Active]);
-    todo = ReCa;
+  case PAD1: if (fak == 0) fak =  -10 * p->d;
+  case PAD2: if (fak == 0) fak =       -p->d;
+  case PAD3: if (fak == 0) fak = -0.1 * p->d;
+  case PAD7: if (fak == 0) fak =   10 * p->d;
+  case PAD8: if (fak == 0) fak =        p->d;
+  case PAD9: if (fak == 0) fak =  0.1 * p->d;
+    todo = ChangeActive(p, g, fak);
     break;
   case KEYBD:
     if (val >= '0' && val <= '9') {
@@ -1550,53 +1564,67 @@ void ProcessQueue(NumParams *p, GraphParams *g) {
       }
     } else switch(val) {
     case 'a': g->AutoScale = 1; todo = ReWr; break;
-    case 'A': g->AutoScale = 0;              break;
+    case 'A': g->AutoScale = 0; break;
     case 'r':
-      p->ExpX = p->ExpX_o;
-      p->ExpY = p->ExpY_o;
-      p->ExpM = p->ExpM_o;
+      p->X  = p->X_o;
+      p->Y  = p->Y_o;
+      p->M  = p->M_o;
       p->Tc = p->Tc_o;
       p->Lc = p->Mc = 0;
-      p->ExpZ  = p->ExpU = 1;
-      todo  = ReCa;
-      p->ExpLx = p->ExpLy = p->ExpLm = p->ExpLz = 0;
-      p->ExpDx = p->ExpDy = p->ExpDu = 0;
-      p->XFak  = p->YFak = 1.0;
+      p->Z  = p->U = 1;
+      p->Lx = p->Ly = p->Lm = p->Lz = 0;
+      p->Dx = p->Dy = p->Du = 0;
+      p->Xf = p->Yf = 1.0;
       g->Active = p->AutoExp = AOff;
+      activei = 0;
+      todo  = ReCa;
       break;
-    case 'c': p->Lc   += p->Delta; INTCHECK(p->Lc  ); todo = ReCa; break;
-    case 'C': p->Lc   -= p->Delta; INTCHECK(p->Lc  ); todo = ReCa; break;
-    case 't': p->Tc   += p->Delta; INTCHECK(p->Tc  ); todo = ReCa; break;
-    case 'T': p->Tc   -= p->Delta; INTCHECK(p->Tc  ); todo = ReCa; break;
-    case 'm': p->Mc   += p->Delta; INTCHECK(p->Mc  ); todo = ReCa; break;
-    case 'M': p->Mc   -= p->Delta; INTCHECK(p->Mc  ); todo = ReCa; break;
-    case 'z': p->ExpZ += p->Delta; INTCHECK(p->ExpZ); todo = ReCa; break;
-    case 'Z': p->ExpZ -= p->Delta; INTCHECK(p->ExpZ); todo = ReCa; break;
-    case 'u': p->ExpU += p->Delta; INTCHECK(p->ExpU); todo = ReCa; break;
-    case 'U': p->ExpU -= p->Delta; INTCHECK(p->ExpU); todo = ReCa; break;
-    case 'i': p->ExpLx+= p->Delta; INTCHECK(p->ExpLx);todo = ReCa; break;
-    case 'I': p->ExpLx-= p->Delta; INTCHECK(p->ExpLx);todo = ReCa; break;
-    case 'j': p->ExpLy+= p->Delta; INTCHECK(p->ExpLy);todo = ReCa; break;
-    case 'J': p->ExpLy-= p->Delta; INTCHECK(p->ExpLy);todo = ReCa; break;
-    case 'n': p->Ny   += p->Delta; INTCHECK(p->Ny  ); todo = ReCaBN; break;
-    case 'N': p->Ny   -= p->Delta; INTCHECK(p->Ny  ); todo = ReCaBN; break;
-    case 'b': p->Beta += p->Delta; INTCHECK(p->Beta); todo = ReCaBN; break;
-    case 'B': p->Beta -= p->Delta; INTCHECK(p->Beta); todo = ReCaBN; break;
-#if 0
-    case 'd': ExpDx+= p->Delta; INTCHECK(ExpDx);todo = ReCa; break;
-    case 'D': ExpDx-= p->Delta; INTCHECK(ExpDx);todo = ReCa; break;
-    case 'b': ExpDy+= p->Delta; INTCHECK(ExpDy);todo = ReCa; break;
-    case 'B': ExpDy-= p->Delta; INTCHECK(ExpDy);todo = ReCa; break;
-#endif
+    case 'c': p->Lc += p->d; INTCHECK(p->Lc); todo = ReCa; break;
+    case 'C': p->Lc -= p->d; INTCHECK(p->Lc); todo = ReCa; break;
+    case 't': p->Tc += p->d; INTCHECK(p->Tc); todo = ReCa; break;
+    case 'T': p->Tc -= p->d; INTCHECK(p->Tc); todo = ReCa; break;
+    case 'm': p->Mc += p->d; INTCHECK(p->Mc); todo = ReCa; break;
+    case 'M': p->Mc -= p->d; INTCHECK(p->Mc); todo = ReCa; break;
+    case 'z': p->Z  += p->d; INTCHECK(p->Z ); todo = ReCa; break;
+    case 'Z': p->Z  -= p->d; INTCHECK(p->Z ); todo = ReCa; break;
+    case 'u': p->U  += p->d; INTCHECK(p->U ); todo = ReCa; break;
+    case 'U': p->U  -= p->d; INTCHECK(p->U ); todo = ReCa; break;
+    case 'i': p->Lx += p->d; INTCHECK(p->Lx); todo = ReCa; break;
+    case 'I': p->Lx -= p->d; INTCHECK(p->Lx); todo = ReCa; break;
+    case 'j': p->Ly += p->d; INTCHECK(p->Ly); todo = ReCa; break;
+    case 'J': p->Ly -= p->d; INTCHECK(p->Ly); todo = ReCa; break;
+    case 'n': p->Ny += p->d; INTCHECK(p->Ny); todo = ReCaBN; break;
+    case 'N': p->Ny -= p->d; INTCHECK(p->Ny); todo = ReCaBN; break;
+    case 'b': p->Beta+=p->d; INTCHECK(p->Beta);todo= ReCaBN; break;
+    case 'B': p->Beta-=p->d; INTCHECK(p->Beta);todo= ReCaBN; break;
       
     case 'l': g->Lines = (g->Lines + 1) % 3; todo = ReWr; break;
     case 'g': g->Grid ^= 1;                  todo = ReWr; break;
     case 'v': g->ShowVar ^= 1;               todo = ReVa; break;
-    case 'V': p->VarType = (p->VarType + 1) % 2; todo = p->Bewert ? ReVa : ReNone; break;
-    case '<': p->Delta *= 0.1; todo = p->AutoExp ? ReCa : ReMa; break;
-    case '>': p->Delta *= 10.; todo = p->AutoExp ? ReCa : ReMa; break;
-    case 'x': g->AutoScale = 1; p->LogX ^= 1; todo = p->Bewert ? ReVa : ReWr; break;
-    case 'y': g->AutoScale = 1; p->LogY ^= 1; todo =                    ReWr; break;
+    case 'V': p->VarType = (p->VarType + 1) % 4;
+      todo = p->Bewert ? ReVa : ReNone; break;
+    case '<': p->d *= 0.1; todo = p->AutoExp ? ReCa : ReMa; break;
+    case '>': p->d *= 10.; todo = p->AutoExp ? ReCa : ReMa; break;
+    case 'x':
+      if (!p->LogX && p->OXmin <= 0) g->AutoScale = 1;
+      p->LogX ^= 1;
+      p->OFmin = (p->LogX ? log10 : exp10)(p->OFmin);
+      p->OFmax = (p->LogX ? log10 : exp10)(p->OFmax);
+      if (!g->AutoScale) {
+	p->OXmin = (p->LogX ? log10 : exp10)(p->OXmin);
+	p->OXmax = (p->LogX ? log10 : exp10)(p->OXmax);
+      }
+      todo = p->Bewert ? ReVa : ReWr;
+      break;
+    case 'y':
+      if (!p->LogY && p->OYmin <= 0) g->AutoScale = 1;
+      p->LogY ^= 1;
+      if (!g->AutoScale) {
+	p->OYmin = (p->LogY ? log10 : exp10)(p->OYmin);
+	p->OYmax = (p->LogY ? log10 : exp10)(p->OYmax);
+      }
+      todo = ReWr;
+      break;
     case 's': gl2ppm("| ppmtogif > fsscale.gif"); break;
     case 'p': g->RemoveFiles = 1; rewrite = write_both(1, rewrite); break;
     case 'P': g->RemoveFiles = 0; rewrite = write_both(1, rewrite); break;
@@ -1613,50 +1641,32 @@ void ProcessQueue(NumParams *p, GraphParams *g) {
   
   p->Bewert = g->ShowVar || p->AutoExp;
   
-  if (!p->AutoExp) fitfak = 0; /* stop fit */
+  if (!p->AutoExp) p->FitFak = 0; /* stop fit */
   
-  if (fitfak) {
-    double oerr = p->Error; /* Error should be set */
-    Variables[p->AutoExp]
-      = floor(Variables[p->AutoExp] / p->Delta + 0.5) * p->Delta + fitfak * p->Delta;
-    INTCHECK(Variables[p->AutoExp]);
-    Calculate(p);
-    p->Error = Valuate(p);
-    if(todo == ReNone) todo = ReMa;
-    
-    if (p->Error >= oerr) {
-      /* undo change and go on in opposite direction */
-      Variables[p->AutoExp] -= fitfak * p->Delta;
-      INTCHECK(Variables[p->AutoExp]);
-      switch (fitfak) {
-      case 1:
-	p->Error = oerr;
-	fitfak   = -1;
-	break;
-      case -1:
-	/* found */
-	Calculate(p);
-	p->Error = Valuate(p);
-	fitfak   = 0;
-	todo     = ReWr;
-      }
-    }
-  }
+  if (p->FitFak && todo == ReNone) todo = Fit(p);
   
   switch(todo) {
   case ReCaBN:
-    p->ExpX = 1.0     / p->Ny;
-    p->ExpY = p->Beta / p->Ny;
+    p->X = 1.0     / p->Ny;
+    p->Y = p->Beta / p->Ny;
     goto calc;
   case ReCa:
-    p->Ny   = 1.0    / p->ExpX;
-    p->Beta = p->Ny  * p->ExpY;
+    p->Ny   = 1.0   / p->X;
+    p->Beta = p->Ny * p->Y;
   calc:
     Calculate(p);
+    if (!p->FullFit && g->AutoScale) {
+      AutoScale(p);
+      p->OFmin = p->OXmin + old_OFmin * (p->OXmax - p->OXmin);
+      p->OFmax = p->OXmin + old_OFmax * (p->OXmax - p->OXmin);
+    }
     /* fallthru */
   case ReVa:
-    if (p->Bewert)  p->Error = Valuate(p);
-    if (p->AutoExp) fitfak = 1;
+    if (p->Bewert)  p->Error  = Valuate(p);
+    if (p->AutoExp) {
+      p->FitFak = 1; /* start fit */
+      todo = ReMa;   /* don't replot */
+    } 
     /* fallthru */
   case ReWr:
     rewrite = 1;
@@ -1813,10 +1823,10 @@ void write_xmgr(void) {
 	  Pp->LogY ? exp10(Pp->OYmin) : Pp->OYmin,
 	  Pp->LogY ? exp10(Pp->OYmax) : Pp->OYmax,
 	  Gp->Title,
-	  xmgr_label(xlab, Gp->Xlab),
+	  xmgr_label(xlab, Gp->Lab[0]),
 	  Pp->Ticks[0].t0, Pp->Ticks[0].t1,
 	  Pp->Ticks[0].t0 * ceil(Pp->OXmin / Pp->Ticks[0].t0),
-	  xmgr_label(ylab, Gp->Ylab),
+	  xmgr_label(ylab, Gp->Lab[1]),
 	  Pp->Ticks[1].t0, Pp->Ticks[1].t1,
 	  Pp->Ticks[1].t0 * ceil(Pp->OYmin / Pp->Ticks[1].t0)
 	  );
@@ -1834,7 +1844,8 @@ void write_xmgr(void) {
     fprintf(xmgrfile, "@ legend string %d \"%s = %g\"\n",k, Gp->Names[0], s->L);
     for (j = 0; j < s->N; j++) {
       Data_t *d = &s->Data[j];
-      fprintf(xmgrfile, "%g %g\n", d->x, d->y);
+      fprintf(xmgrfile, "%s%g %g\n",
+	      finite(d->x) && finite(d->y) ? "" : "#",d->x, d->y);
     }
     fprintf(xmgrfile, "&\n");
     k++;
@@ -1861,7 +1872,8 @@ void write_dats(void) {
 	      Gp->Names[0], s->L, Gp->Names[1], Gp->Names[2]);
       for (j = 0; j < s->N; j++) {
 	Data_t *d = &s->Data[j];
-	fprintf(tn, "%g %g\n", d->x, d->y);
+	fprintf(tn, "%s%g %g\n",
+		finite(d->x) && finite(d->y) ? "" : "#",d->x, d->y);
       }
     }
     fclose(tn);
@@ -1885,8 +1897,8 @@ void write_gnuplot(void) {
   fprintf(gpfile, "set data style %s\n", styles[Gp->Lines]);
   fprintf(gpfile, "set title '%s'\n", Gp->Title);
   
-  fprintf(gpfile, "set xlabel '%s'\n", gnuplot_label(xlab, Gp->Xlab));
-  fprintf(gpfile, "set ylabel '%s'\n", gnuplot_label(ylab, Gp->Ylab));
+  fprintf(gpfile, "set xlabel '%s'\n", gnuplot_label(xlab, Gp->Lab[0]));
+  fprintf(gpfile, "set ylabel '%s'\n", gnuplot_label(ylab, Gp->Lab[1]));
   
   fprintf(gpfile, "plot [%g:%g][%g:%g] ",
 	  Pp->LogX ? exp10(Pp->OXmin) : Pp->OXmin,
@@ -1924,7 +1936,8 @@ void write_gnuplot(void) {
 	      Gp->Names[0], s->L, Gp->Names[1], Gp->Names[2]);
       for (j = 0; j < s->N; j++) {
 	Data_t *d = &s->Data[j];
-	fprintf(s->datfile, "%g %g\n", d->x, d->y);
+	fprintf(s->datfile, "%s%g %g\n",
+		finite(d->x) && finite(d->y) ? "" : "#",d->x, d->y);
       }
     }
     fclose(s->datfile);
@@ -1934,7 +1947,8 @@ void write_gnuplot(void) {
     Set_t *s  = &Pp->Set[i];
     for (j = 0; j < s->N; j++) {
       Data_t *d = &s->Data[j];
-      fprintf(gpfile, "%g %g\n", d->x, d->y);
+      fprintf(gpfile, "%s%g %g\n",
+	      finite(d->x) && finite(d->y) ? "" : "#",d->x, d->y);
     }
     fprintf(gpfile, "end %s = %g\n", Gp->Names[0], s->L);
   }
@@ -1959,7 +1973,9 @@ int main(int argc, char *argv[]) {
     "-*-Times-Medium-R-Normal--*-120-*-*-*-*-*-*",
     {"L", "T", "M", "D"},
     {0.02, 0.01},
-    {0, 1, 2, 3, 4, 5, 6,/*7*/ 8, 9, 10, 11,/*12*/ 13,/*14*/ 15, 16, 17}
+    {AOff, Ad,
+     AXf, ATc, AZ, ALz, ALc, AX,      ALx,
+     AYf, AMc, AU,       AY,     ALy,  AM, ALm}
   };
   
   Pp = &P;
@@ -1972,12 +1988,12 @@ int main(int argc, char *argv[]) {
   
   memset(&P, 0, sizeof(NumParams));
   P.Progname = argv[0];
-  P.Delta = 0.1;
-  P.ExpZ = 1.0;
-  P.ExpU = 1.0;
-  P.XFak = 1.0;
-  P.YFak = 1.0;
-  P.Ny = 1.0 / P.ExpX;
+  P.d = 0.1;
+  P.Z = 1.0;
+  P.U = 1.0;
+  P.Xf = 1.0;
+  P.Yf = 1.0;
+  P.Ny = 1.0 / P.X;
   P.FullFit = 1;
   
   if (isatty(fileno(stdin)))
