@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995-2001
  *
- * $Id: fsscale.c,v 2.51 2001-02-21 10:02:14+01 fred Exp fred $
+ * $Id: fsscale.c,v 2.52 2001/03/07 13:33:29 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.52  2001/03/07 13:33:29  fred
+ * Added 'r'everse video, reset is now 'R'
+ *
  * Revision 2.51  2001-02-21 10:02:14+01  fred
  * *** empty log message ***
  *
@@ -161,7 +164,7 @@
  */
 /*#pragma OPTIONS inline+Pow*/
 
-char   *RCSId = "$Id: fsscale.c,v 2.51 2001-02-21 10:02:14+01 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.52 2001/03/07 13:33:29 fred Exp fred $";
 
 /* Note: AIX: Ignore warnings "No function prototype given for 'finite'" See math.h, line 429 */
 
@@ -287,6 +290,7 @@ typedef struct GraphParams_ {
   int   NumActive;
   char  GPName[256];
   char  XmgrName[256];
+  char  DatName[256];
   Int32 XPos,   YPos;
   Int32 PXSize, PYSize;
   Int32 PXPos,  PYPos;
@@ -304,10 +308,13 @@ typedef struct GraphParams_ {
 const GraphParams *Gp;
 const NumParams   *Pp;
 
-int  write_both   (int, int);
+int  write_all    (int, int);
 void write_gnuplot(void);
 void write_xmgr   (void);
+void write_dat    (void);
+#ifdef OLD_DATFILES
 void write_dats   (void);
+#endif
 void byebye       (int sig);
 
 void byebye(int sig) {
@@ -319,8 +326,9 @@ void byebye(int sig) {
       if (s->datfilename[0] != 0) remove(s->datfilename);
     }
 #endif
-    if (  Gp->GPName[0] != 0) remove(  Gp->GPName);
+    if (Gp->  GPName[0] != 0) remove(Gp->  GPName);
     if (Gp->XmgrName[0] != 0) remove(Gp->XmgrName);
+    if (Gp-> DatName[0] != 0) remove(Gp-> DatName);
   }
   exit(sig);
 }
@@ -343,7 +351,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.51 $ (C) Fred Hucht 1995-1998\n"
+	    "$Revision: 2.52 $ (C) Fred Hucht 1995-1998\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
@@ -416,10 +424,11 @@ void Usage(int verbose) {
 	    "  Key 'r':            Reverse all colors\n"
 	    "  Key 'l':            Toggle drawing of lines\n"
 	    "  Key 'g':            Toggle drawing of grid\n"
-	    "  Key 'p':            Write gnuplot-loadable file 'fsscale-PID-T,M.gp'\n"
-	    "                      and xmgr/xmgrace-loadable file 'fsscale-PID-T,M.xmgr'\n"
+	    "  Key 'p':            Write gnuplot-loadable file 'fsscale-PID-L-T-M.gp',\n"
+	    "                       xmgr/xmgrace-loadable file 'fsscale-PID-L-T,M.agr'\n"
+	    "                            and generic data file 'fsscale-PID-L-T,M.dat'\n"
 	    "                      Note: Files are deleted on exit (see 'P')\n"
-	    "  Key 'P':            as 'p', but don't delete datafiles on exit\n"
+	    "  Key 'P':            as 'p', but don't delete files on exit\n"
 	    "  Key 's':            Save actual graph to file 'fsscale.gif'\n"
 	    "  Key 'v':            Toggle drawing of variance function\n"
 	    "                      red curve: variance of datasets\n"
@@ -1547,7 +1556,7 @@ void ProcessQueue(NumParams *p, GraphParams *g) {
   
   switch(dev) {
   case INPUTCHANGE:
-    if (val == 0) rewrite = write_both(0, rewrite);
+    if (val == 0) rewrite = write_all(0, rewrite);
     showpos = val == g->PlotW;
     goto show;
   case MOUSEX:
@@ -1812,11 +1821,13 @@ void ProcessQueue(NumParams *p, GraphParams *g) {
       todo = ReWr;
       break;
     case 's': gl2ppm("| ppmtogif > fsscale.gif"); break;
-    case 'p': g->RemoveFiles = 1; rewrite = write_both(1, rewrite); break;
-    case 'P': g->RemoveFiles = 0; rewrite = write_both(1, rewrite); break;
+    case 'p': g->RemoveFiles = 1; rewrite = write_all(1, rewrite); break;
+    case 'P': g->RemoveFiles = 0; rewrite = write_all(1, rewrite); break;
     case 'q':
     case '\033':
+#ifdef OLD_DATFILES
       if (g->RemoveFiles == 0) write_dats();
+#endif
       byebye(0);
       break;
     }
@@ -1866,7 +1877,7 @@ void ProcessQueue(NumParams *p, GraphParams *g) {
   }
 }
 
-int write_both(int flag, int rewrite) {
+int write_all(int flag, int rewrite) {
   static plotting = 0;
   
   if (!(flag || plotting)) return rewrite; /* flag == 1 when 'p' was pressed
@@ -1880,6 +1891,7 @@ int write_both(int flag, int rewrite) {
   plotting = 1;
   write_gnuplot();
   write_xmgr();
+  write_dat();
   color(Gp->BgColor); rectfi(0,0,2,2); sleep(0);
   return 0;
 }
@@ -2031,7 +2043,7 @@ void write_xmgr(void) {
     for (j = 0; j < s->N; j++) {
       Data_t *d = &s->Data[j];
       fprintf(xmgrfile, "%s%g %g\n",
-	      finite(d->x) && finite(d->y) ? "" : "#",d->x, d->y);
+	      finite(d->x) && finite(d->y) ? "" : "#", d->x, d->y);
     }
     fprintf(xmgrfile, "&\n");
     k++;
@@ -2040,6 +2052,7 @@ void write_xmgr(void) {
   fclose(xmgrfile);
 }
 
+#ifdef OLD_DATFILES
 void write_dats(void) {
   int i, j;
   for (i = 0; i < Pp->S; i++) if (Pp->Set[i].active) {
@@ -2047,14 +2060,15 @@ void write_dats(void) {
     char datfilename[256];
     FILE *tn;
     
-    sprintf(datfilename, "fsscale-%d-%s,%s,%s=%g.dat",
+    sprintf(datfilename, "fsscale-%d-%s-%s-%s=%g.dat",
 	    getpid(), Gp->Names[1], Gp->Names[2], Gp->Names[0], s->L);
     
     if ((tn = fopen(datfilename, "w")) == NULL) {
       perror(datfilename);
     } else {
       fprintf(tn,
-	      "##Params: %s=%g\n##Names: %s %s\n",
+	      "##Params: %s = %g\n"
+	      "##Names: %s %s\n",
 	      Gp->Names[0], s->L, Gp->Names[1], Gp->Names[2]);
       for (j = 0; j < s->N; j++) {
 	Data_t *d = &s->Data[j];
@@ -2064,6 +2078,39 @@ void write_dats(void) {
     }
     fclose(tn);
   }
+}
+#endif
+
+void write_dat(void) {
+  FILE *datfile;
+  int i, j;
+  
+  if ((datfile = fopen(Gp->DatName, "w")) == NULL) {
+    perror(Gp->DatName);
+    return;
+  }
+  
+  fprintf(datfile,
+	  "##Params: Tc = %g, Lc = %g, Mc = %g, "
+	  "Ex = %g, Ey = %g, Ez = %g, Eu = %g, Em = %g\n",
+	  Pp->Tc, Pp->Lc, Pp->Mc, 
+	  Pp->X, Pp->Y, Pp->Z, Pp->U, Pp->M);
+  
+  for (i = 0; i < Pp->S; i++) if (Pp->Set[i].active) {
+    Set_t *s  = &Pp->Set[i];
+    fprintf(datfile,
+	    "##Params: %s = %g\n"
+	    "##Names: %s %s\n",
+	    Gp->Names[0], s->L,
+	    Gp->Names[1], Gp->Names[2]);
+    for (j = 0; j < s->N; j++) {
+      Data_t *d = &s->Data[j];
+      fprintf(datfile, "%s%g %g\n",
+	      finite(d->x) && finite(d->y) ? "" : "#",d->x, d->y);
+    }
+    fprintf(datfile, "\n\n");
+  }
+  fclose(datfile);
 }
 
 void write_gnuplot(void) {
@@ -2188,10 +2235,12 @@ int main(int argc, char *argv[]) {
   
   GetArgs(&P, &G, argc, argv);
   
-  sprintf(G.GPName, "fsscale-%d-%s,%s.gp", 
-	  getpid(), G.Names[1], G.Names[2]);
-  sprintf(G.XmgrName, "fsscale-%d-%s,%s.xmgr", 
-	  getpid(), G.Names[1], G.Names[2]);
+  sprintf(G.GPName,   "fsscale-%d-%s-%s-%s.gp", 
+	  getpid(), G.Names[0], G.Names[1], G.Names[2]);
+  sprintf(G.XmgrName, "fsscale-%d-%s-%s-%s.agr", 
+	  getpid(), G.Names[0], G.Names[1], G.Names[2]);
+  sprintf(G.DatName,  "fsscale-%d-%s-%s-%s.dat", 
+	  getpid(), G.Names[0], G.Names[1], G.Names[2]);
   
   ReadData(&P);
 #if 1
