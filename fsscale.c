@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995-1998
  *
- * $Id: fsscale.c,v 2.33 1998-02-26 15:31:43+01 fred Exp fred $
+ * $Id: fsscale.c,v 2.34 1998/02/27 17:48:16 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.34  1998/02/27 17:48:16  fred
+ * Reordered todo stuff
+ *
  * Revision 2.33  1998-02-26 15:31:43+01  fred
  * Cosmetic
  *
@@ -137,7 +140,7 @@ typedef struct Data_t_ {
   double T;			/* X-axis, normally temperature */
   double M;			/* Y-axis, normally order parameter */
   double x,  y;			/* Plot position {x,y} */
-  double lx, ly;		/* Log Plot position {lx,ly} */
+  /*double lx, ly;		Log Plot position {lx,ly} */
 } Data_t;
 
 typedef struct Set_t_ {
@@ -149,7 +152,6 @@ typedef struct Set_t_ {
   Data_t *Data;		/* Set data */
 #define ASZ	1024
   double  Fit[ASZ];	/* Fit */
-  double LFit[ASZ];	/* logFit */
   int    sorted;
 #ifdef GNUPLOT_DATFILES
   char datfilename[256];
@@ -166,10 +168,8 @@ int    AV = 0;
 
 struct Var_ {
   double x, m, v;
-} Var[2][ASZ], LVar[2][ASZ];
+} Var[2][ASZ];
 
-/*double  Mean[ASZ],  Var[2][ASZ][2];
-  double LMean[ASZ], LVar[2][ASZ][2];*/
 double Error;
 
 int  Colors[] = {WHITE, GREEN, YELLOW, CYAN, MAGENTA, RED, GRAY};
@@ -240,7 +240,7 @@ int    Swh, FontH, FontD;
 char   *Title = "FSScale";
 char   *Progname;
 char   *Font  = "-*-Times-Medium-R-Normal--*-120-*-*-*-*-*-*";
-char   *RCSId = "$Id: fsscale.c,v 2.33 1998-02-26 15:31:43+01 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.34 1998/02/27 17:48:16 fred Exp fred $";
 char   GPName[256]   = "";
 char   XmgrName[256] = "";
 
@@ -304,7 +304,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.33 $ (C) Fred Hucht 1995-1998\n"
+	    "$Revision: 2.34 $ (C) Fred Hucht 1995-1998\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
@@ -354,6 +354,8 @@ void Usage(int verbose) {
 	    "  Keys pad1/pad7:     Change activated variable by  10 * d\n"
 	    "  Keys pad2/pad8:     Change activated variable by       d\n"
 	    "  Keys pad3/pad9:     Change activated variable by 0.1 * d\n"
+	    "  Keys pad5:          Toggle automatic determination of activated variable\n"
+	    "                      in steps of d (...)\n"
 	    "\n"
 	    "  Arrow left|right:   Change exponent x:       x -=|+= d\n"
 	    "  Arrow up|down:      Change exponent y:       y -=|+= d\n"
@@ -376,8 +378,8 @@ void Usage(int verbose) {
 	    "                      and xmgr-loadable file 'fsscale-PID-T,M.xmgr'\n"
 	    "  Key 'P':            as 'p', but don't delete datafiles on exit\n"
 	    "  Key 's':            Save actual graph to file 'fsscale.gif'\n"
-	    "  Key 'v':            Autodetermine exponent y\n"
-	    "  Key 'V':            Toggle drawing of variance function\n"
+	    "  Key 'V':            Change evaluation function of variance\n"
+	    "  Key 'v':            Toggle drawing of variance function\n"
 	    "                      red curve: variance of datasets\n"
 	    "                      gray curve: previous variance\n"
 	    "  Key 'x':            Toggle X-axis linear/log scale\n"
@@ -600,8 +602,8 @@ void Calculate(void) {
       double y = d->y = pow(d->M - Mc, ExpU + ExpDu * s->D) * Ly
 	* pow(d->T - Tc, ExpM) * (ExpLm ? pow(log(d->T - Tc), ExpLm) : 1.0);
       
-      d->lx = (x > 0.0) ? log10(x) : 0.0;
-      d->ly = (y > 0.0) ? log10(y) : 0.0;
+      /*d->lx = (x > 0.0) ? log10(x) : 0.0;
+	d->ly = (y > 0.0) ? log10(y) : 0.0;*/
       
       if (finite(x) && finite(y)) {
 	if (         x < Xmin)   Xmin   = x;
@@ -644,12 +646,10 @@ void Calculate(void) {
 }
 
 double Valuate(void) {
-  int i, j, k;
+  int i, j, k, nvar = 0, nvarp = 0;
   double ret   = 0.0;
   double var   = 0.0;
-  double lvar  = 0.0;
   double varp  = 0.0;
-  double lvarp = 0.0;
   double fmin, fmax;
   
   Vmin   = Ymin;
@@ -679,8 +679,14 @@ double Valuate(void) {
     double m = 0.0;
     int ja;
     
-    if (!LogX) for (k = j = ja = 0; k < ASZ; k++) {
-      double x = fmin + k * (fmax - fmin) / ASZ;
+    for (k = j = ja = 0; k < ASZ; k++) {
+      double x;
+      if (LogX) {
+	/*x = exp(log(XminXp) + k * (log(Xmax / XminXp)) / ASZ);*/
+	x = fmin * pow(fmax / fmin, (double)k / ASZ);
+      } else {
+	x = fmin + k * (fmax - fmin) / ASZ;
+      }
       Var[AV][k].x = x;
       if (x <  s->Data[0     ].x ||
 	  x >= s->Data[s->N-1].x) {
@@ -690,43 +696,30 @@ double Valuate(void) {
 	  ja = j;
 	  while (s->Data[j].x <= x && j + 1 < s->N) j++;
 	  if (ja == 0 && !FullFit) ja = j - 1; /* ??? */
-	  m = (s->Data[j].y - s->Data[ja].y)
-	    / (s->Data[j].x - s->Data[ja].x);
+	  if (LogX) {
+	    m = log10(s->Data[j].y / s->Data[ja].y)
+	      / log10(s->Data[j].x / s->Data[ja].x);
+	  } else {
+	    m = (s->Data[j].y - s->Data[ja].y)
+	      / (s->Data[j].x - s->Data[ja].x);
+	  }
 	}
-	s->Fit[k] = s->Data[ja].y + m * (x - s->Data[ja].x);
-      }
-    } else for (k = j = ja = 0; k < ASZ; k++) {
-      /*double x = exp(log(XminXp) + k * (log(Xmax / XminXp)) / ASZ);*/
-      double x = fmin * pow(fmax / fmin, (double)k / ASZ);
-      LVar[AV][k].x = x;
-      if (x <  s->Data[0     ].x ||
-	  x >= s->Data[s->N-1].x) {
-	s->LFit[k] = NODATA;
-      } else {
-	if (s->Data[j].x <= x && j + 1 < s->N) {
-	  ja = j;
-	  while (s->Data[j].x <= x && j + 1 < s->N) j++;
-	  if (ja == 0 && !FullFit) ja = j - 1; /* ??? */
-	  m = (s->Data[j].y - s->Data[ja].y)
-	    / (s->Data[j].x - s->Data[ja].x);
+	if (LogX) {
+	  /* exp10(log10(s->Data[ja].y) + m * (log10(x) - log10(s->Data[ja].x))) */
+	  s->Fit[k] = s->Data[ja].y * pow(x / s->Data[ja].x, m);
+	} else {
+	  s->Fit[k] = s->Data[ja].y + (x - s->Data[ja].x) * m;
 	}
-	s->LFit[k] = s->Data[ja].y + m * (x - s->Data[ja].x);
+	if(!finite(s->Fit[k])) s->Fit[k] = NODATA;
       }
     }
   }
   
   for (k = 0; k < ASZ; k++) {
-    int m    = 0;
-    int lm   = 0;
+    int m = 0;
     
-    /*Mean[k]        = 0.0;
-      Var[AV][k][1]  = 0.0;
-      LMean[k]       = 0.0;
-      LVar[AV][k][1] = 0.0;*/
-    Var[AV][k].m  = 0.0;
-    Var[AV][k].v  = 0.0;
-    LVar[AV][k].m = 0.0;
-    LVar[AV][k].v = 0.0;
+    Var[AV][k].m = 0.0;
+    Var[AV][k].v = 0.0;
     
     for (i = 0; i < S; i++) if (Set[i].active) {
       if (Set[i].Fit[k] != NODATA) {
@@ -734,58 +727,37 @@ double Valuate(void) {
 	Var[AV][k].v += SQR(Set[i].Fit[k]);
 	m++;
       }
+      
       /*printf("%d %g %g (%g %g)\n", i, Set[i].Fit[k], Var[AV][k].m,
 	Var[AV][k].x, Var[AV][k].v);*/
-      if (Set[i].LFit[k] != NODATA) {
-	LVar[AV][k].m +=     Set[i].LFit[k];
-	LVar[AV][k].v += SQR(Set[i].LFit[k]);
-	lm++;
-      }
     }
     
-    Var[AV][k].m /= m;
-    if (m == 1) {
+    if (m <= 1) {
       Var[AV][k].v = 0.0;
     } else {
+      Var[AV][k].m /= m;
       Var[AV][k].v /= m;
       Var[AV][k].v  = Var[AV][k].v - SQR(Var[AV][k].m);
       Var[AV][k].v /= SQR(Var[AV][k].m); /* Relative variance */
+      
+      var += Var[AV][k].v;
+      nvar++;
+      
+      if (Var[AV][k].v) {
+	varp += log(Var[AV][k].v);
+	nvarp++;
+      }
     }
-    var += Var[AV][k].v;
-    if (Var[AV][k].v) varp += log(Var[AV][k].v);
     
     /*Vmin = 0.0;if (Var[AV][k] > 0 && Var[AV][k] < VminYp) VminYp = Var[AV][k];*/
     
-    LVar[AV][k].m /= lm;
-    if (lm == 1) {
-      LVar[AV][k].v = 0.0;
-    } else {
-      LVar[AV][k].v /= lm;
-      LVar[AV][k].v  = LVar[AV][k].v - SQR(LVar[AV][k].m);
-      LVar[AV][k].v /= SQR(LVar[AV][k].m); /* Relative variance */
-    }
-    lvar += LVar[AV][k].v;
-    if (LVar[AV][k].v) lvarp += log(LVar[AV][k].v);
 #ifdef DEBUG
-    printf("%g (%g,%g) %g (%g,%g)\n", 
-	   Var[AV][k].x,  Var[AV][k].m,  Var[AV][k].v, 
-	   LVar[AV][k].x, LVar[AV][k].m, LVar[AV][k].v
-	   );
+    printf("%g (%g,%g)\n", Var[AV][k].x, Var[AV][k].m, Var[AV][k].v);
 #endif
     {
       double x, y;
       x = Var[AV][k].x;
       y = Var[AV][k].v;
-      if (finite(x) && finite(y)) {
-	if (y > 0 && y < 1e-8)   y      = 1e-8;
-	if (         y < Vmin)   Vmin   = y;
-	if (x > 0 && y < VminXp) VminXp = y;
-	if (y > 0 && y < VminYp) VminYp = y;
-	if (         y > Vmax)   Vmax   = y;
-	if (x > 0 && y > VmaxXp) VmaxXp = y;
-      }
-      x = LVar[AV][k].x;
-      y = LVar[AV][k].v;
       if (finite(x) && finite(y)) {
 	if (y > 0 && y < 1e-8)   y      = 1e-8;
 	if (         y < Vmin)   Vmin   = y;
@@ -800,15 +772,15 @@ double Valuate(void) {
     var / ASZ, lvar / ASZ, varp / ASZ, lvarp / ASZ);*/
   
   switch(VarType) {
-  case 0: ret =     (LogX ? lvar  : var ) / ASZ ; break;
-  case 1: ret = exp((LogX ? lvarp : varp) / ASZ); break;
+  case 0: if (nvar)  ret = var / nvar; break;
+  case 1: if (nvarp) ret = exp(varp / nvarp); break;
   default:
     fprintf(stderr, "Unknown VarType %d, should not happen\n",
 	    VarType);
     exit(1);
   }
   
-  if (!finite(ret)) ret = 1e10 + fabs(*Variables[AutoExp]);
+  /* if (!finite(ret)) ret = 1e10 + fabs(*Variables[AutoExp]); */
   
   return ret;
 }
@@ -1151,11 +1123,32 @@ void DrawMain(void) {
   sleep(0);
 }
 
+void checked_v2d(double x0, double x1, double dm[2][2]) {
+  if ((LogX && (x0 <= 0.0)) ||
+      (LogY && (x1 <= 0.0))) {
+    /* Point is not a number, don't draw */
+    enddraw();
+  } else {
+    double x[2];
+    x[0] = LogX ? log10(x0) : x0;
+    x[1] = LogY ? log10(x1) : x1;
+    if (x[0] < dm[0][0] || x[0] > dm[0][1] ||
+	x[1] < dm[1][0] || x[1] > dm[1][1]) {
+      /* Point is too far away, don't draw */
+      enddraw();
+    } else {
+      /* All OK */
+      if (bgndraw()) v2d(x); /* Draw at least one point */
+      v2d(x);
+    }
+  }
+}
+
 void DrawPlot(void) {
   int i, j, k;
   char text[256];
   double x, y;
-  double dxmin, dxmax, dymin, dymax;
+  double dm[2][2];
   
   winset(PlotW);
   
@@ -1185,10 +1178,10 @@ void DrawPlot(void) {
   
   ortho2(OXmin, OXmax, OYmin, OYmax);
   
-  dxmin = OXmin - 10 * (OXmax - OXmin);
-  dxmax = OXmax + 10 * (OXmax - OXmin);
-  dymin = OYmin - 10 * (OYmax - OYmin);
-  dymax = OYmax + 10 * (OYmax - OYmin);
+  dm[0][0] = OXmin - 10 * (OXmax - OXmin);
+  dm[0][1] = OXmax + 10 * (OXmax - OXmin);
+  dm[1][0] = OYmin - 10 * (OYmax - OYmin);
+  dm[1][1] = OYmax + 10 * (OYmax - OYmin);
   
   color(BgColor);
   clear();
@@ -1264,40 +1257,12 @@ void DrawPlot(void) {
     
     for (j = 0; j < s->N; j++) {
       Data_t *d = &s->Data[j];
-      double x[2];
-      x[0] = LogX ? d->lx : d->x;
-      x[1] = LogY ? d->ly : d->y;
-      
-      if ((LogX && (d->x <= 0.0)) ||
-	  (LogY && (d->y <= 0.0)) ||
-	  x[0] < dxmin || x[0] > dxmax ||
-	  x[1] < dymin || x[1] > dymax) {
-	/* Point is not a number or too far away, don't draw */
-	enddraw();
-      } else {
-	/* All OK */
-	if (bgndraw()) v2d(x); /* Draw at least one point */
-	v2d(x);
-      }
+      checked_v2d(d->x, d->y, dm);
     }
     enddraw();
 #ifdef SHOWFIT
     for (k = 0; k < ASZ; k++) {
-      double x[2];
-      x[0] = (LogX ? LVar : Var)[AV][k].x;
-      x[1] = LogX ? Set[i].LFit[k] : Set[i].Fit[k];
-      
-      if (LogX && (x[0] <= 0.0) ||
-	  LogY && (x[1] <= 0.0) ||
-	  x[1] == NODATA) {
-	/* Point is not a number, don't draw */
-	enddraw();
-      } else {
-	x[0] = LogX ? log10(x[0]) : x[0];
-	x[1] = LogY ? log10(x[1]) : x[1];
-	bgndraw();
-	v2d(x);
-      }
+      checked_v2d(Var[AV][k].x, Set[i].Fit[k], dm);
     }
     enddraw();
 #endif
@@ -1309,20 +1274,7 @@ void DrawPlot(void) {
     /* Draw mean */
     color(RED);
     for (k = 0; k < ASZ; k++) {
-      double x[2];
-      x[0] = (LogX ? LVar  : Var)[AV][k].x;
-      x[1] = (LogX ? LVar  : Var)[AV][k].m;
-      
-      if ((LogX && (x[0] <= 0.0)) ||
-	  (LogY && (x[1] <= 0.0))) {
-	/* Point is not a number, don't draw */
-	enddraw();
-      } else {
-	x[0] = LogX ? log10(x[0]) : x[0];
-	x[1] = LogY ? log10(x[1]) : x[1];
-	bgndraw();
-	v2d(x);
-      }
+      checked_v2d(Var[AV][k].x, Var[AV][k].m, dm);
     }
     enddraw();
     
@@ -1332,37 +1284,9 @@ void DrawPlot(void) {
 	i++;
 	av = AV;
       }
-      
       color(i == 0 ? GRAY : RED);
-#if 1
       for (k = 0; k < ASZ; k++) {
-	double x[2];
-	x[0] = (LogX ? LVar : Var)[av][k].x;
-	x[1] = (LogX ? LVar : Var)[av][k].v;
-#else
-      for (k = l = 0; k < ASZ || l < ASZ;) {
-	double x[2];
-	if (((Var[av][k].x < LVar[av][l].x) && k < ASZ) || l >= ASZ) {
-	  x[0] = Var[av][k].x;
-	  x[1] = Var[av][k].v;
-	  k++;
-	} else {
-	  x[0] = LVar[av][l].x;
-	  x[1] = LVar[av][l].v;
-	  l++;
-	}
-#endif
-	
-	if ((LogX && (x[0] <= 0.0)) ||
-	    (LogY && (x[1] <= 0.0))) {
-	  /* Point is not a number, don't draw */
-	  enddraw();
-	} else {
-	  x[0] = LogX ? log10(x[0]) : x[0];
-	  x[1] = LogY ? log10(x[1]) : x[1];
-	  bgndraw();
-	  v2d(x);
-	}
+	checked_v2d(Var[av][k].x, Var[av][k].v, dm);
       }
       enddraw();
       av = 1 - av;
@@ -1706,8 +1630,8 @@ void ProcessQueue(void) {
       
     case 'l': Lines = (Lines + 1) % 3; todo = ReWr; break;
     case 'g': Grid ^= 1;               todo = ReWr; break;
-    case 'V': ShowVar ^= 1;            todo = ReVa; break;
-    case 'v': VarType = (VarType + 1) % 2; todo = Bewert ? ReVa : ReNone; break;
+    case 'v': ShowVar ^= 1;            todo = ReVa; break;
+    case 'V': VarType = (VarType + 1) % 2; todo = Bewert ? ReVa : ReNone; break;
     case '<': Delta *= 0.1; todo = AutoExp ? ReCa : ReMa; break;
     case '>': Delta *= 10.; todo = AutoExp ? ReCa : ReMa; break;
     case 'x': AutoScale = 1; LogX ^= 1; todo = Bewert ? ReVa : ReWr; break;
