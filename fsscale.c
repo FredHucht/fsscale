@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995, 1996
  *
- * $Id: fsscale.c,v 2.10 1996-10-24 10:57:17+02 fred Exp fred $
+ * $Id: fsscale.c,v 2.11 1996-11-05 18:44:13+01 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.11  1996-11-05 18:44:13+01  fred
+ * Autoscale now includes variance function
+ *
  * Revision 2.10  1996-10-24 10:57:17+02  fred
  * Removed Key i
  *
@@ -103,22 +106,22 @@ double Ymin, YminXp, YminYp;		/* smallest positive */
 double Xmax, XmaxYp;
 double Ymax, YmaxXp;
 double OXmin, OXmax, OYmin, OYmax; 	/* Drawing range */
-int    LogX  = 0;
-int    LogY  = 0;
-double Tc    = 0.0;
-double Mc    = 0.0;
-double Lc    = 0.0;
-double Ny    = 0.0;
-double Beta  = 0.0;
-double ExpX  = 0.0;
-double ExpY  = 0.0;
-double ExpM  = 0.0;
-double ExpZ  = 1.0;
-double ExpU  = 1.0;
-int    Lines = 1;
-int    Grid  = 0;
-Int32  XSize = 400;
-Int32  YSize = 400;
+int    LogX   = 0;
+int    LogY   = 0;
+double Tc_o   = 0.0, Tc    = 0.0;
+double Mc     = 0.0;
+double Lc     = 0.0;
+double Ny     = 0.0;
+double Beta   = 0.0;
+double ExpX_o = 0.0, ExpX  = 0.0;
+double ExpY_o = 0.0, ExpY  = 0.0;
+double ExpM_o = 0.0, ExpM  = 0.0;
+double ExpZ   = 1.0;
+double ExpU   = 1.0;
+int    Lines  = 1;
+int    Grid   = 0;
+Int32  XSize  = 400;
+Int32  YSize  = 400;
 Int32  XPos;
 Int32  YPos;
 Int32  PXSize;
@@ -142,7 +145,7 @@ int    Swh, FontH, FontD;
 char   *Title = "FSScale";
 char   *Progname;
 char   *Font  = "-*-Times-Medium-R-Normal--*-120-*-*-*-*-*-*";
-char   *RCSId = "$Id: fsscale.c,v 2.10 1996-10-24 10:57:17+02 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.11 1996-11-05 18:44:13+01 fred Exp fred $";
 
 void gnuplot(int);    
 void byebye(int sig);
@@ -172,7 +175,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.10 $ (C) Fred Hucht 1995, 1996\n"
+	    "$Revision: 2.11 $ (C) Fred Hucht 1995, 1996\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
@@ -219,7 +222,7 @@ void Usage(int verbose) {
 	    "  middle mouse:       Enable autoscaling (default)\n"
 	    "  left|right mouse:   Zoom in|out and disable autoscaling\n"
 	    "  Keys 'a'|'A':       Enable|disable autoscaling\n"
-	    "  Key 'r':            Reset all values\n"
+	    "  Key 'r':            Reset all values to commandline values\n"
 	    "  Key 'l':            Toggle drawing of lines\n"
 	    "  Key 'g':            Toggle drawing of grid\n"
 	    "  Key 'p':            Write gnuplot-loadable file 'fsscale.gp'\n"
@@ -251,17 +254,14 @@ void GetArgs(int argc, char *argv[]) {
     case 'h':
       Usage(1);
       break;
-    case 't': Tc   = atof(optarg); break;
       /*case 'n': Ny   = atof(optarg); break;
 	case 'b': Beta = atof(optarg); break;*/
-    case 'x': ExpX = atof(optarg); break;
-    case 'y': ExpY = atof(optarg); break;
-    case 'm': ExpM = atof(optarg); break;
+    case 't': Tc_o   = Tc   = atof(optarg); break;
+    case 'x': ExpX_o = ExpX = atof(optarg); break;
+    case 'y': ExpY_o = ExpY = atof(optarg); break;
+    case 'm': ExpM_o = ExpM = atof(optarg); break;
     case 'v': ShowVar = 1; break;
     case 'N':
-      /* strcpy(Names[0], strtok(optarg, ","));
-	 strcpy(Names[1], strtok(NULL,   ","));
-	 strcpy(Names[2], strtok(NULL,   ","));*/
       Names[0] = strtok(optarg, ",");
       Names[1] = strtok(NULL,   ",");
       Names[2] = strtok(NULL,   ",");
@@ -1106,7 +1106,11 @@ void ProcessQueue(void) {
     case 'a': AutoScale = 1;      replot = rd = 1; break;
     case 'A': AutoScale = 0;                       break;
     case 'r':
-      ExpX = ExpY = ExpM = Lc = Tc = Mc = 0;
+      ExpX = ExpX_o;
+      ExpY = ExpY_o;
+      ExpM = ExpM_o;
+      Tc   = Tc_o;
+      Lc = Mc = 0;
       ExpZ = ExpU = XY = 1;
       break;
     case 'c': Lc   += Delta; INTCHECK(Lc  ); rc = 1; break;
