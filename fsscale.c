@@ -5,6 +5,9 @@
  * $Id: fsscale.c,v 2.31 1998-02-12 15:17:35+01 fred Exp $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.32  1998-02-26 15:22:45+01  fred
+ * Added fit stuff
+ *
  * Revision 2.31  1998-02-12 15:17:35+01  fred
  * Added finite()
  *
@@ -257,7 +260,7 @@ int Actives[NUMACTIVE] = {
   0,    1,   2,   3,  4,   5,   6,/*7*/  8,   9,  10,   11,/*12*/13,/*14*/15,  16, 17
 };
 int Active  = AOff, Activei = 0, NumActive = NUMACTIVE - 3;
-int AutoExpType = 0, AutoExp = AOff;
+int VarType = 0, AutoExp = AOff;
 
 void write_both(int);
 void write_gnuplot(void);
@@ -377,7 +380,8 @@ void Usage(int verbose) {
 	    "  Key 'x':            Toggle X-axis linear/log scale\n"
 	    "  Key 'y':            Toggle Y-axis linear/log scale\n"
 	    "  Keys 'q'|Esc:       Quit\n"
-	    "  Keys \"00\"-\"99\":     Activate/deactivate dataset 00-99\n"
+	    "  Keys \"00\"-\"98\":     Activate/deactivate dataset 00-99\n"
+	    "  Keys \"99\":            Activate/deactivate all datasets\n"
 	    , Progname);
   exit(1);
 }
@@ -792,12 +796,12 @@ double Valuate(void) {
   /*printf("var = %g, lvar = %g varp = %g lvarp = %g\n",
     var / ASZ, lvar / ASZ, varp / ASZ, lvarp / ASZ);*/
   
-  switch(AutoExpType) {
+  switch(VarType) {
   case 0: ret =     (LogX ? lvar  : var ) / ASZ ; break;
   case 1: ret = exp((LogX ? lvarp : varp) / ASZ); break;
   default:
-    fprintf(stderr, "Unknown AutoExpType %d, should not happen\n",
-	    AutoExpType);
+    fprintf(stderr, "Unknown VarType %d, should not happen\n",
+	    VarType);
     exit(1);
   }
   
@@ -917,7 +921,7 @@ void charstrH(char *text, int h) {
 }    
 
 void DrawMain(void) {
-  int ncx, ncy;
+  int ncx, ncy, i;
   char lmlc[80], tmtc[80], mmmc[80], text[256];
   char logtmtc[80], loglmlc[80];
   
@@ -932,8 +936,8 @@ void DrawMain(void) {
     charstrC(text);
   }
   
-  if (Error) {
-    sprintf(text, "V%d = %e", AutoExpType, Error);
+  if (Bewert) {
+    sprintf(text, "V%d = %e", VarType, Error);
     cmov2(XSize - FRAME - strwidth(text), FontD);
     color(Colors[2]);
     charstrC(text);
@@ -1131,12 +1135,21 @@ void DrawMain(void) {
   }
   
   cmov2(FRAME, FontH + FontD);
-  sprintf(text, "%s =", Names[0]); charstrC(text);
+  sprintf(text, "%s =", Names[0]);
+  charstr(text);
+  
+  for (i = 0; i < S; i++) {
+    Set_t *s  = &Set[i];
+    color(s->color);
+    sprintf(text, s->active ? " %.4g" : " (%.4g)", s->L);
+    charstr(text);
+  }  
+  
   sleep(0);
 }
 
 void DrawPlot(void) {
-  int i, j;
+  int i, j, k;
   char text[256];
   double x, y;
   double dxmin, dxmax, dymin, dymax;
@@ -1241,65 +1254,54 @@ void DrawPlot(void) {
     setlinestyle(0);
   }
   
-  for (i = 0; i < S; i++) {
+  for (i = 0; i < S; i++) if (Set[i].active) {
     Set_t *s  = &Set[i];
     
-    winset(MainW);
     color(s->color);
-    sprintf(text, s->active ? " %.4g" : " (%.4g)", s->L);
-    charstr(text);
     
-    winset(PlotW);
-    if (s->active) {
-      color(s->color);
+    for (j = 0; j < s->N; j++) {
+      Data_t *d = &s->Data[j];
+      double x[2];
+      x[0] = LogX ? d->lx : d->x;
+      x[1] = LogY ? d->ly : d->y;
       
-      for (j = 0; j < s->N; j++) {
-	Data_t *d = &s->Data[j];
-	double x[2];
-	x[0] = LogX ? d->lx : d->x;
-	x[1] = LogY ? d->ly : d->y;
-	
-	if ((LogX && (d->x <= 0.0)) ||
-	   (LogY && (d->y <= 0.0)) ||
-	   x[0] < dxmin || x[0] > dxmax ||
-	   x[1] < dymin || x[1] > dymax) {
-	  /* Point is not a number or too far away, don't draw */
-	  enddraw();
-	} else {
-	  /* All OK */
-	  if (bgndraw()) v2d(x); /* Draw at least one point */
-	  v2d(x);
-	}
-      }
-      enddraw();
-#ifdef SHOWFIT
-      {
-	int k;
-	for (k = 0; k < ASZ; k++) {
-	  double x[2];
-	  x[0] = (LogX ? LVar : Var)[AV][k].x;
-	  x[1] = LogX ? Set[i].LFit[k] : Set[i].Fit[k];
-	  
-	  if (LogX && (x[0] <= 0.0) ||
-	      LogY && (x[1] <= 0.0) ||
-	      x[1] == NODATA) {
-	    /* Point is not a number, don't draw */
-	    enddraw();
-	  } else {
-	    x[0] = LogX ? log10(x[0]) : x[0];
-	    x[1] = LogY ? log10(x[1]) : x[1];
-	    bgndraw();
-	    v2d(x);
-	  }
-	}
+      if ((LogX && (d->x <= 0.0)) ||
+	  (LogY && (d->y <= 0.0)) ||
+	  x[0] < dxmin || x[0] > dxmax ||
+	  x[1] < dymin || x[1] > dymax) {
+	/* Point is not a number or too far away, don't draw */
 	enddraw();
+      } else {
+	/* All OK */
+	if (bgndraw()) v2d(x); /* Draw at least one point */
+	v2d(x);
       }
-#endif
     }
+    enddraw();
+#ifdef SHOWFIT
+    for (k = 0; k < ASZ; k++) {
+      double x[2];
+      x[0] = (LogX ? LVar : Var)[AV][k].x;
+      x[1] = LogX ? Set[i].LFit[k] : Set[i].Fit[k];
+      
+      if (LogX && (x[0] <= 0.0) ||
+	  LogY && (x[1] <= 0.0) ||
+	  x[1] == NODATA) {
+	/* Point is not a number, don't draw */
+	enddraw();
+      } else {
+	x[0] = LogX ? log10(x[0]) : x[0];
+	x[1] = LogY ? log10(x[1]) : x[1];
+	bgndraw();
+	v2d(x);
+      }
+    }
+    enddraw();
+#endif
   }
   
   if (ShowVar) {
-    int i, k, av;
+    int av;
     
     /* Draw mean */
     color(RED);
@@ -1472,16 +1474,15 @@ int Selector(double*xmin, double*xmax, double*ymin, double*ymax, int col) {
 void ProcessQueue(void) {
   Int32 dev = 4711;
   Int16 val;
-  int XY = 0;
-  int rd = 0; /* Redraw ? */
-  int rc = 0; /* Recalc ? */
+  enum RecalcNames {
+    ReNone, ReMa, ReDr, ReWr, ReVa, ReCaBN, ReCa
+  };
+  int todo = ReNone;
   static Int16 mx = 0, my = 0, showpos = 1;
-  static int autofak = 0;
+  static int fitfak = 0;
   double fak = 0.0;
   
-  /*qreset();*/
-  
-  if (autofak == 0 || qtest())
+  if (fitfak == 0 || qtest())
     dev = qread(&val);
   
 #if 0
@@ -1539,7 +1540,7 @@ void ProcessQueue(void) {
 	OFmin = (fmin - OXmin) / (OXmax - OXmin);
 	OFmax = (fmax - OXmin) / (OXmax - OXmin);
 	AutoScale = 0;
-	Rewrite = rd = 1;
+	todo = ReWr;
       }
       break;
     case 1:
@@ -1547,7 +1548,7 @@ void ProcessQueue(void) {
 	  OFmin = (fmin - OXmin) / (OXmax - OXmin);
 	  OFmax = (fmax - OXmin) / (OXmax - OXmin);
 	  FullFit = 0;
-	  rc = 1;
+	  todo = ReCa;
       }
       break;
     }
@@ -1556,11 +1557,11 @@ void ProcessQueue(void) {
     switch (ShiftKey) {
     case 0:
       AutoScale = 1;
-      Rewrite = rd = 1;
+      todo = ReWr;
       break;
     case 1:
       FullFit = 1;
-      rc = 1;
+      todo = ReCa;
       break;
     }
     break;
@@ -1581,7 +1582,7 @@ void ProcessQueue(void) {
       OFmin = (fmin - OXmin) / (OXmax - OXmin);
       OFmax = (fmax - OXmin) / (OXmax - OXmin);
       AutoScale = 0;
-      Rewrite = rd = 1;
+      todo = ReWr;
     }
     break;
   case REDRAW:
@@ -1606,28 +1607,30 @@ void ProcessQueue(void) {
 	   XSize, YSize,
 	   PXSize, PYSize, PXPos, PYPos);
 #endif
-    rd = 1;
+    todo = ReDr;
     break;
-  case  DOWNARROWKEY: ExpY -= Delta; INTCHECK(ExpY); XY = 1; break;
-  case    UPARROWKEY: ExpY += Delta; INTCHECK(ExpY); XY = 1; break;
-  case  LEFTARROWKEY: ExpX -= Delta; INTCHECK(ExpX); XY = 1; break;
-  case RIGHTARROWKEY: ExpX += Delta; INTCHECK(ExpX); XY = 1; break;
-  case     PAGEUPKEY: ExpM += Delta; INTCHECK(ExpM); XY = 1; break;
-  case   PAGEDOWNKEY: ExpM -= Delta; INTCHECK(ExpM); XY = 1; break;
+  case  DOWNARROWKEY: ExpY -= Delta; INTCHECK(ExpY); todo = ReCa; break;
+  case    UPARROWKEY: ExpY += Delta; INTCHECK(ExpY); todo = ReCa; break;
+  case  LEFTARROWKEY: ExpX -= Delta; INTCHECK(ExpX); todo = ReCa; break;
+  case RIGHTARROWKEY: ExpX += Delta; INTCHECK(ExpX); todo = ReCa; break;
+  case     PAGEUPKEY: ExpM += Delta; INTCHECK(ExpM); todo = ReCa; break;
+  case   PAGEDOWNKEY: ExpM -= Delta; INTCHECK(ExpM); todo = ReCa; break;
   case PAD4:
     Activei += NumActive - 2;
   case PAD6:
     Activei = (Activei + 1) % NumActive;
-    Active = Actives[Activei];
-    Rewrite = rd = 1;
+    Active  = Actives[Activei];
+    todo    = ReMa;
+    Rewrite = 1;
     break;
   case PAD5:
     if (AutoExp == Active) {
       AutoExp = AOff;
-      Rewrite = rd = 1;
+      todo    = ReMa;
+      Rewrite = 1;
     } else if (Active != AXF && Active != AYF) {
       AutoExp = Active;
-      rc = 1;
+      todo = ReCa;
     }
     break;
   case PAD1: if (fak == 0) fak =  -10 * Delta;
@@ -1641,64 +1644,71 @@ void ProcessQueue(void) {
     else
       *Variables[Active] += fak;
     INTCHECK(*Variables[Active]);
-    XY = 1;
+    todo = ReCa;
     break;
   case KEYBD:
     if (val >= '0' && val <= '9') {
       Int16 val2;
-      val = 10 * (val - '0') - '0';
-      if (KEYBD == qread(&val2) && val + val2 < S) {
-	Set[val + val2].active ^= 1;
-	rc = 1;
+      if (KEYBD == qread(&val2) && val2 >= '0' && val2 <= '9') {
+	val = 10 * (val - '0') + (val2 - '0');
+	if (val == 99) {
+	  int i;
+	  for (i = 0; i < S; i++) Set[i].active ^= 1;
+	  todo = ReCa;
+	} else if (val < S) {
+	  Set[val].active ^= 1;
+	  todo = ReCa;
+	}
       }
     } else switch(val) {
-    case 'a': AutoScale = 1; Rewrite = rd = 1; break;
-    case 'A': AutoScale = 0;                   break;
+    case 'a': AutoScale = 1; todo = ReWr; break;
+    case 'A': AutoScale = 0;              break;
     case 'r':
       ExpX = ExpX_o;
       ExpY = ExpY_o;
       ExpM = ExpM_o;
-      Tc   = Tc_o;
+      Tc = Tc_o;
       Lc = Mc = 0;
-      ExpZ = ExpU = XY = 1;
+      ExpZ  = ExpU = 1;
+      todo  = ReCa;
       ExpLx = ExpLy = ExpLm = ExpLz = 0;
       ExpDx = ExpDy = ExpDu = 0;
-      XFak = YFak = 1.0;
+      XFak  = YFak = 1.0;
+      Active = AutoExp = AOff;
       break;
-    case 'c': Lc   += Delta; INTCHECK(Lc  ); rc = 1; break;
-    case 'C': Lc   -= Delta; INTCHECK(Lc  ); rc = 1; break;
-    case 't': Tc   += Delta; INTCHECK(Tc  ); rc = 1; break;
-    case 'T': Tc   -= Delta; INTCHECK(Tc  ); rc = 1; break;
-    case 'm': Mc   += Delta; INTCHECK(Mc  ); rc = 1; break;
-    case 'M': Mc   -= Delta; INTCHECK(Mc  ); rc = 1; break;
-    case 'z': ExpZ += Delta; INTCHECK(ExpZ); rc = 1; break;
-    case 'Z': ExpZ -= Delta; INTCHECK(ExpZ); rc = 1; break;
-    case 'u': ExpU += Delta; INTCHECK(ExpU); rc = 1; break;
-    case 'U': ExpU -= Delta; INTCHECK(ExpU); rc = 1; break;
-    case 'i': ExpLx+= Delta; INTCHECK(ExpLx);rc = 1; break;
-    case 'I': ExpLx-= Delta; INTCHECK(ExpLx);rc = 1; break;
-    case 'j': ExpLy+= Delta; INTCHECK(ExpLy);rc = 1; break;
-    case 'J': ExpLy-= Delta; INTCHECK(ExpLy);rc = 1; break;
-    case 'n': Ny   += Delta; INTCHECK(Ny  ); XY = 2; break;
-    case 'N': Ny   -= Delta; INTCHECK(Ny  ); XY = 2; break;
-    case 'b': Beta += Delta; INTCHECK(Beta); XY = 2; break;
-    case 'B': Beta -= Delta; INTCHECK(Beta); XY = 2; break;
+    case 'c': Lc   += Delta; INTCHECK(Lc  ); todo = ReCa; break;
+    case 'C': Lc   -= Delta; INTCHECK(Lc  ); todo = ReCa; break;
+    case 't': Tc   += Delta; INTCHECK(Tc  ); todo = ReCa; break;
+    case 'T': Tc   -= Delta; INTCHECK(Tc  ); todo = ReCa; break;
+    case 'm': Mc   += Delta; INTCHECK(Mc  ); todo = ReCa; break;
+    case 'M': Mc   -= Delta; INTCHECK(Mc  ); todo = ReCa; break;
+    case 'z': ExpZ += Delta; INTCHECK(ExpZ); todo = ReCa; break;
+    case 'Z': ExpZ -= Delta; INTCHECK(ExpZ); todo = ReCa; break;
+    case 'u': ExpU += Delta; INTCHECK(ExpU); todo = ReCa; break;
+    case 'U': ExpU -= Delta; INTCHECK(ExpU); todo = ReCa; break;
+    case 'i': ExpLx+= Delta; INTCHECK(ExpLx);todo = ReCa; break;
+    case 'I': ExpLx-= Delta; INTCHECK(ExpLx);todo = ReCa; break;
+    case 'j': ExpLy+= Delta; INTCHECK(ExpLy);todo = ReCa; break;
+    case 'J': ExpLy-= Delta; INTCHECK(ExpLy);todo = ReCa; break;
+    case 'n': Ny   += Delta; INTCHECK(Ny  ); todo = ReCaBN; break;
+    case 'N': Ny   -= Delta; INTCHECK(Ny  ); todo = ReCaBN; break;
+    case 'b': Beta += Delta; INTCHECK(Beta); todo = ReCaBN; break;
+    case 'B': Beta -= Delta; INTCHECK(Beta); todo = ReCaBN; break;
 #if 0
-    case 'd': ExpDx+= Delta; INTCHECK(ExpDx);rc = 1; break;
-    case 'D': ExpDx-= Delta; INTCHECK(ExpDx);rc = 1; break;
-    case 'b': ExpDy+= Delta; INTCHECK(ExpDy);rc = 1; break;
-    case 'B': ExpDy-= Delta; INTCHECK(ExpDy);rc = 1; break;
+    case 'd': ExpDx+= Delta; INTCHECK(ExpDx);todo = ReCa; break;
+    case 'D': ExpDx-= Delta; INTCHECK(ExpDx);todo = ReCa; break;
+    case 'b': ExpDy+= Delta; INTCHECK(ExpDy);todo = ReCa; break;
+    case 'B': ExpDy-= Delta; INTCHECK(ExpDy);todo = ReCa; break;
 #endif
       
-    case 'l': Lines = (Lines + 1) % 3; Rewrite = rd = 1; break;
-    case 'g': Grid ^= 1; Rewrite = rd = 1; break;
-    case 'V': ShowVar  ^= 1; rc = 1; break;
-    case 'v': AutoExpType = (AutoExpType + 1) % 2; rc = 1; break;
-    case '<': Delta *= 0.1; rd = 1; if (AutoExp) rc = 1; break;
-    case '>': Delta *= 10.; rd = 1; if (AutoExp) rc = 1; break;
-    case 'x': AutoScale = 1; LogX ^= 1; Rewrite = rd = 1;
-      if (AutoExp) rc = 1; break;
-    case 'y': AutoScale = 1; LogY ^= 1; Rewrite = rd = 1; break;
+    case 'l': Lines = (Lines + 1) % 3; todo = ReWr; break;
+    case 'g': Grid ^= 1;               todo = ReWr; break;
+    case 'V': ShowVar ^= 1;            todo = ReVa; break;
+    case 'v': VarType = (VarType + 1) % 2; todo = Bewert ? ReVa : ReNone; break;
+    case '<': Delta *= 0.1; todo = AutoExp ? ReCa : ReMa; break;
+    case '>': Delta *= 10.; todo = AutoExp ? ReCa : ReMa; break;
+    case 'x': AutoScale = 1; LogX ^= 1; todo = Bewert ? ReVa : ReWr; break;
+    case 'y': AutoScale = 1; LogY ^= 1; todo =                 ReWr; break;
     case 's': gl2ppm("| ppmtogif > fsscale.gif"); break;
     case 'p': RemoveFiles = 1; write_both(1); break;
     case 'P': RemoveFiles = 0; write_both(1); break;
@@ -1715,62 +1725,74 @@ void ProcessQueue(void) {
   
   Bewert = ShowVar || AutoExp;
   
-  if (autofak && !AutoExp) {
-    autofak = 0;
-    rc = 1;
+  if (fitfak && !AutoExp) { /* stop fit */
+    fitfak = 0;
+    todo   = ReMa;
   }
   
-  switch(XY) {
-  case 1:
-    rc   = 1;
+  switch(todo) {
+  case ReCa:
     Ny   = 1.0 / ExpX;
     Beta = Ny  * ExpY;
     break;
-  case 2:
-    rc   = 1;
+  case ReCaBN:
     ExpX = 1.0  / Ny;
     ExpY = Beta / Ny;
     break;
   }
   
-  if (rc) {
+  switch (todo) {
+  case ReCa:
+  case ReCaBN:
     Calculate();
+    /* fallthru */
+  case ReVa:
     if (Bewert) Error = Valuate();
     if (AutoExp) {
-      autofak = -1;
-      DrawMain();
-      DrawPlot();
+      fitfak = 1;
+      todo = ReDr;
     } else {
-      Rewrite = rd = 1;
+      todo = ReWr /*Rewrite = rd = 1*/;
     }
   }
   
-  if (autofak) {
+  if (fitfak) {
     double oerr = Error;
-    *Variables[AutoExp] = floor(*Variables[AutoExp] / Delta + 0.5) * Delta;
-    *Variables[AutoExp] += autofak * Delta;
+    *Variables[AutoExp]
+      = floor(*Variables[AutoExp] / Delta + 0.5) * Delta + fitfak * Delta;
     INTCHECK(*Variables[AutoExp]);
     Calculate();
     Error = Valuate();
-    DrawMain();
+    /*DrawMain();*/ 
+    if(todo == ReNone) todo = ReMa;
     
     if (Error >= oerr) {
-      *Variables[AutoExp] -= autofak * Delta;
+      /* undo change and go on in opposite direction */
+      *Variables[AutoExp] -= fitfak * Delta;
       INTCHECK(*Variables[AutoExp]);
-      Error    = oerr;
-      autofak *= -1;
-      if (autofak == -1) { /* found */
+      switch (fitfak) {
+      case 1:
+	Error  = oerr;
+	fitfak = -1;
+	break;
+      case -1:
+	/* found */
 	Calculate();
-	Error   = Valuate();
-	autofak = 0;
-	Rewrite = rd = 1;
+	Error  = Valuate();
+	fitfak = 0;
+	todo   = ReWr;
       }
     }
   }
   
-  if (rd) {
+  switch (todo) {
+  case ReWr:
+    Rewrite = 1;
+    /* fallthru */
+  case ReDr:
+  case ReMa:
     DrawMain();
-    DrawPlot();
+    if(todo != ReMa) DrawPlot();
     ShowPos(mx, my, showpos);
   }
 }
