@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995, 1996
  *
- * $Id: fsscale.c,v 2.21 1997-03-12 16:54:16+01 michael Exp fred $
+ * $Id: fsscale.c,v 2.22 1997/03/12 18:20:20 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.22  1997/03/12 18:20:20  fred
+ * Added xmgr stuff
+ *
  * Revision 2.21  1997-03-12 16:54:16+01  michael
  * kleinen bug beim dateinamen erzeugen gefixt
  *
@@ -186,7 +189,7 @@ int    Swh, FontH, FontD;
 char   *Title = "FSScale";
 char   *Progname;
 char   *Font  = "-*-Times-Medium-R-Normal--*-120-*-*-*-*-*-*";
-char   *RCSId = "$Id: fsscale.c,v 2.21 1997-03-12 16:54:16+01 michael Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.22 1997/03/12 18:20:20 fred Exp fred $";
 char   GPName[256]   = "";
 char   XmgrName[256] = "";
 
@@ -245,7 +248,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.21 $ (C) Fred Hucht 1995, 1996\n"
+	    "$Revision: 2.22 $ (C) Fred Hucht 1995, 1996\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
@@ -858,8 +861,9 @@ void Draw(void) {
   
   /* * ExpLx * log(L) */
   if(ExpLx || Active == ALx) {
-    charstrC(" * log(L)");
-    ncx += sprintf(Xlab + ncx, "\\cdot \\log(L)");
+    sprintf(text, " * log(%s)", Names[0]);
+    charstrC(text);
+    ncx += sprintf(Xlab + ncx, "\\cdot \\log(%s)", Names[0]);
     if(ExpLx != 1.0 || Active == ALx) {
       sprintf(text, "#%c%g#0", (Active == ALx) + '0', ExpLx);
       charstrH(text, FontH/2);
@@ -914,8 +918,9 @@ void Draw(void) {
   
   /* * ExpLy * log(L) */
   if(ExpLy || Active == ALy) {
-    charstrC(" * log(L)");
-    ncy += sprintf(Ylab + ncy, "\\cdot \\log(L)");
+    sprintf(text, " * log(%s)", Names[0]);
+    charstrC(text);
+    ncy += sprintf(Ylab + ncy, "\\cdot \\log(%s)", Names[0]);
     if(ExpLy != 1.0 || Active == ALy) {
       sprintf(text, "#%c%g#0", (Active == ALy) + '0', ExpLy);
       charstrH(text, FontH/2);
