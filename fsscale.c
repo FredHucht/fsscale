@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995, 1996
  *
- * $Id: fsscale.c,v 2.7 1996-10-23 15:39:55+02 michael Exp fred $
+ * $Id: fsscale.c,v 2.8 1996/10/23 14:13:56 fred Exp michael $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.8  1996/10/23 14:13:56  fred
+ * Added weisser Punkt.
+ *
  * Revision 2.7  1996-10-23 15:39:55+02  michael
  * Added help line for key 'p'
  *
@@ -132,7 +135,7 @@ int    Swh, FontH, FontD;
 char   *Title = "FSScale";
 char   *Progname;
 char   *Font  = "-*-Times-Medium-R-Normal--*-120-*-*-*-*-*-*";
-char   *RCSId = "$Id: fsscale.c,v 2.7 1996-10-23 15:39:55+02 michael Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.8 1996/10/23 14:13:56 fred Exp michael $";
 
 void gnuplot(int);    
 void byebye(int sig);
@@ -162,7 +165,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.7 $ (C) Fred Hucht 1995, 1996\n"
+	    "$Revision: 2.8 $ (C) Fred Hucht 1995, 1996\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
@@ -1008,14 +1011,14 @@ void ProcessQueue(void) {
       winset(PlotW);
       if(Selector(&OXmin, &OXmax, &OYmin, &OYmax)) {
 	AutoScale = 0;
-	rd = 1;
+	replot = rd = 1;
       }
     }
     break;
   case MIDDLEMOUSE:
     if(val == 1) {
       AutoScale = 1;
-      rd = 1;
+      replot = rd = 1;
     }
     break;
   case RIGHTMOUSE:
@@ -1031,7 +1034,7 @@ void ProcessQueue(void) {
       OXmax = xc + ZOOMOUT * xd;
       OYmin = yc - ZOOMOUT * yd;
       OYmax = yc + ZOOMOUT * yd;
-      rd = 1;
+      replot = rd = 1;
     }
     break;
   case REDRAW:
@@ -1074,7 +1077,7 @@ void ProcessQueue(void) {
 	rc = 1;
       }
     } else switch(val) {
-    case 'a': AutoScale = 1;               rd = 1; break;
+    case 'a': AutoScale = 1;      replot = rd = 1; break;
     case 'A': AutoScale = 0;                       break;
     case 'r':
       ExpX = ExpY = ExpM = Lc = Tc = Mc = 0;
@@ -1100,19 +1103,19 @@ void ProcessQueue(void) {
     case 'N': Ny   -= Delta; INTCHECK(Ny  ); XY = 2; break;
     case 'b': Beta += Delta; INTCHECK(Beta); XY = 2; break;
     case 'B': Beta -= Delta; INTCHECK(Beta); XY = 2; break;
-    case 'l': Lines = (Lines + 1) % 3; rd = 1; break;
-    case 'g': Grid    ^= 1; rd = 1; break;
+    case 'l': Lines = (Lines + 1) % 3; replot = rd = 1; break;
+    case 'g': Grid    ^= 1; replot = rd = 1; break;
     case 'v': ShowVar ^= 1; rc = 1; break;
     case '<': Delta *= 0.1; rd = 1; break;
     case '>': Delta *= 10.; rd = 1; break;
-    case 'x': AutoScale = 1; LogX ^= 1; rd = 1; break;
-    case 'y': AutoScale = 1; LogY ^= 1; rd = 1; break;
+    case 'x': AutoScale = 1; LogX ^= 1; replot = rd = 1; break;
+    case 'y': AutoScale = 1; LogY ^= 1; replot = rd = 1; break;
     case 'i': logicop(LO_NSRC); break;
     case 's': gl2ppm("| ppmtogif > fsscale.gif"); break;
     case 'p': gnuplot(1); break;
 #if 0
-    case '3': AutoScale = 1; LogX = 1; LogY = 0; rd = 1; break;
-    case '4': AutoScale = 1; LogX = 1; LogY = 1; rd = 1; break;
+    case '3': AutoScale = 1; LogX = 1; LogY = 0; replot = rd = 1; break;
+    case '4': AutoScale = 1; LogX = 1; LogY = 1; replot = rd = 1; break;
 #endif
     case 'q':
     case '\033':
@@ -1136,13 +1139,12 @@ void ProcessQueue(void) {
   
   if(rc) {
     Calculate();
-    rd = 1;
+    replot = rd = 1;
   }
   
   if(rd) {
     Draw();
     ShowPos(mx, my, showpos);
-    replot = 1;
   }
 }
 
@@ -1159,7 +1161,7 @@ void gnuplot(int flag) {
   if (!replot && !flag) return;    /* replot == 1 when plot has changed
 				      and needs to be replotted.
 				      flag forces a replot (see above) */
-  color(WHITE); rectfi(0,0,2,2); sleep(0);
+  color(FgColor); rectfi(0,0,2,2); sleep(0);
   plotting = 1;
   replot = 0;
   if ((gpfile = fopen(GNUPLOTFILE, "w")) == NULL) {
@@ -1200,7 +1202,7 @@ void gnuplot(int flag) {
 	    (i < S - 1) ? ',' : '\n');
   }
   fclose(gpfile);
-  color(BLACK); rectfi(0,0,2,2); sleep(0);
+  color(BgColor); rectfi(0,0,2,2); sleep(0);
   return;
 }
   
