@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995, 1996
  *
- * $Id: fsscale.c,v 2.9 1996-10-23 17:14:04+02 michael Exp fred $
+ * $Id: fsscale.c,v 2.10 1996-10-24 10:57:17+02 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.10  1996-10-24 10:57:17+02  fred
+ * Removed Key i
+ *
  * Revision 2.9  1996-10-23 17:14:04+02  michael
  * fixed bug: weisser Punkt is now Punkt in FgColor.
  * setting of replot is more intelligent.
@@ -139,7 +142,7 @@ int    Swh, FontH, FontD;
 char   *Title = "FSScale";
 char   *Progname;
 char   *Font  = "-*-Times-Medium-R-Normal--*-120-*-*-*-*-*-*";
-char   *RCSId = "$Id: fsscale.c,v 2.9 1996-10-23 17:14:04+02 michael Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.10 1996-10-24 10:57:17+02 fred Exp fred $";
 
 void gnuplot(int);    
 void byebye(int sig);
@@ -169,7 +172,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.9 $ (C) Fred Hucht 1995, 1996\n"
+	    "$Revision: 2.10 $ (C) Fred Hucht 1995, 1996\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
@@ -544,6 +547,25 @@ void Calculate(void) {
 	     LMean[k], LVar[k][0], LVar[k][1]
 	     );
 #endif
+      {
+	double x, y;
+	x = Var[k][0];
+	y = Var[k][1];
+	if(y > 0 && y < 1e-8)   y      = 1e-8;
+	if(         y < Ymin)   Ymin   = y;
+	if(x > 0 && y < YminXp) YminXp = y;
+	if(y > 0 && y < YminYp) YminYp = y;
+	if(         y > Ymax)   Ymax   = y;
+	if(x > 0 && y > YmaxXp) YmaxXp = y;
+	x = LVar[k][0];
+	y = LVar[k][1];
+	if(y > 0 && y < 1e-8)   y      = 1e-8;
+	if(         y < Ymin)   Ymin   = y;
+	if(x > 0 && y < YminXp) YminXp = y;
+	if(y > 0 && y < YminYp) YminYp = y;
+	if(         y > Ymax)   Ymax   = y;
+	if(x > 0 && y > YmaxXp) YmaxXp = y;
+      }
     }
     /*printf("var = %g, lvar = %g\n", var / ASZ, lvar / ASZ);*/
   }
