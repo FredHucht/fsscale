@@ -25,22 +25,39 @@
 
 #define FRAME 	10
 #define SWH 	50		/* subwindow height */
+#define ASZ	500
 
 typedef struct Data_t_ {
-  double L;			/* Linear system size */
-  double T;			/* Temperature */
-  double M;			/* Order parameter */
-  double x[2];			/* Plot position */
-  double lx[2];			/* Log Plot position */
+  double T;			/* X-axis, normally temperature */
+  double M;			/* Y-axis, normally order parameter */
+  double x[2];			/* Plot position {x,y} */
+  double lx[2];			/* Log Plot position {lx,ly} */
 } Data_t;
+
+typedef struct Set_t_ {
+  double L;		/* Scaling parameter, normally linear system size */
+  int    color;		/**/
+  int	 N;		/* Number of data points */
+  Data_t *Data;		/* Set data */
+#ifdef BEWERT
+  double A[ASZ];	/* Fit */
+  double lA[ASZ];	/* logFit */
+#endif
+} Set_t;
+
+#ifdef BEWERT
+double  Mean[ASZ], Var[ASZ];
+double LMean[ASZ], LVar[ASZ];
+#endif
 
 int Colors[] = {WHITE, GREEN, YELLOW, CYAN, MAGENTA, RED, GRAY};
 
-Data_t *Data = NULL;
-int    N = 0;			/* Number of points */
-double Xmin, Xmax, Ymin, Ymax;	/* Data */
-double LXmin, LYmin;		/* log(Data) */
-double OXmin, OXmax, OYmin, OYmax; /* Viewport */
+Set_t  *Set = NULL;
+int    S = 0;				/* Number of sets */
+double  Xmin,  Xmax,  Ymin,  Ymax;	/* range of data */
+double LXmin, LYmin, LXmax, LYmax;	/* log(range) */
+double LLXmin, LLYmin;
+double OXmin, OXmax, OYmin, OYmax; 	/* Drawing range */
 int    LogX = 0;
 int    LogY = 0;
 double Tc   = 0.0;
@@ -69,11 +86,11 @@ Int32  MainW, PlotW;
 
 void Usage(const char *name, int verbose) {
   fprintf(stderr, 
-	  "Usage: %s [-help] [-g] [-t Tc] [-n Ny] [-b Beta]\n",
+	  "Usage: %s [-help] [-g] [-t Tc] [-n Ny] [-b Beta] [-lx] [-ly]\n",
 	  name);
   if(verbose)
     fprintf(stderr,
-	    "       V 1.4 (C) Fred Hucht 1996\n"
+	    "       V 1.5 (C) Fred Hucht 1996\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         linear dimension of the system L\n"
@@ -88,10 +105,12 @@ void Usage(const char *name, int verbose) {
 	    "  -n Ny              Preset Ny\n"
 	    "  -b Beta            Preset Beta/Gamma\n"
 	    "  -g                 Change from Ny/Beta to Ny/Gamma\n"
+	    "  -lx/-ly            Set X/Y-axis to logscale\n"
 	    "  -help              Guess...\n"
 	    "\n"
 	    "Possible actions are:\n"
 	    "  left/right mouse:  Zoom in/out and disable autoscaling\n"
+	    "  middle mouse:      Enable autoscaling\n"
 	    "  Arrow left/right:  Change exponent of X-axis\n"
 	    "  Arrow up/down:     Change exponent of Y-axis\n"
 	    "  Key 'a':           Enable autoscaling\n"
@@ -117,7 +136,7 @@ void GetArgs(int argc, char *argv[]) {
   extern int optind;
   extern char *optarg;
   
-  while((ch = getopt(argc, argv, "ght:n:b:?")) != EOF)
+  while((ch = getopt(argc, argv, "ght:n:b:l:?")) != EOF)
     switch(ch) {
     case 'g':
       BetaName = "Gamma";
@@ -129,6 +148,18 @@ void GetArgs(int argc, char *argv[]) {
     case 't': Tc   = atof(optarg); break;
     case 'n': Ny   = atof(optarg); break;
     case 'b': Beta = atof(optarg); break;
+    case 'l':
+      if(strcmp(optarg, "x") == 0) {
+	LogX = 1; break;
+      }
+      if(strcmp(optarg, "y") == 0) {
+	LogY = 1; break;
+      }
+      if((  strcmp(optarg, "xy") == 0)
+	 ||(strcmp(optarg, "xy") == 0)) {
+	LogX = LogY = 1; break;
+      }
+      /* Nobreak */
     default:
       Usage(argv[0], 0);
       break;
@@ -159,6 +190,7 @@ void GraphInit(void) {
   qdevice(LEFTARROWKEY);
   qdevice(RIGHTARROWKEY);
   qdevice(LEFTMOUSE);
+  qdevice(MIDDLEMOUSE);
   qdevice(RIGHTMOUSE);
   tie(LEFTMOUSE, MOUSEX, MOUSEY);
   qdevice(MOUSEX);
@@ -168,67 +200,179 @@ void GraphInit(void) {
 }
 
 void ReadData(void) {
+  Set_t *s;
   char buf[1024];
-  if(Data) free(Data);
-  N = 0;
-  Data = (Data_t*) malloc(sizeof(Data_t));
+  double oldL = 47.11;
+  
+  if(Set) perror("Set...");
+  
+  Set = (Set_t*) malloc(sizeof(Set_t)); /* First set */
+  S   = -1;
+  s   = Set;
+  
   while(!feof(stdin)) {
     fgets(buf, sizeof(buf), stdin);
     if(buf[0] != '#') {
-      int n = sscanf(buf, "%lf %lf %lf", &Data[N].L, &Data[N].T, &Data[N].M);
-      if(n == 3) {
+      double L, T, M;
+      int n = sscanf(buf, "%lf %lf %lf", &L, &T, &M);
+      if(n == 3) { /* Valid */
 #if DEBUG > 1
-	fprintf(stderr, "%lf %lf %lf\n", Data[N].L, Data[N].T, Data[N].M);
+	fprintf(stderr, "%lf %lf %lf\n", L, T, M);
 #endif
-	N++;
-	Data = (Data_t*) realloc(Data, (N+1) * sizeof(Data_t));
+	if(L != oldL) { /* New set */
+	  oldL     = L;
+	  S++;
+	  Set      = (Set_t*) realloc(Set, (S+1) * sizeof(Set_t));
+	  s        = &Set[S];
+	  s->L     = L;
+	  s->color = Colors[S % (sizeof(Colors)/sizeof(Colors[0]))];
+	  s->N     = 0;
+	  s->Data  = (Data_t*) malloc(sizeof(Data_t));
+	  /* s->A     = (double*) malloc(ASZ*sizeof(double));
+	     s->lA    = (double*) malloc(ASZ*sizeof(double)); */
+	}
+	
+	s->Data = (Data_t*) realloc(s->Data, (s->N+1) * sizeof(Data_t));
+	s->Data[s->N].T = T;
+	s->Data[s->N].M = M;
+	s->N++;
       }
     }
   }
+  S++;
 }
 
 void Calculate(void) {
-  int i, j;
-  double x, y, oldL = 47.11, Lx, Ly, s=0.0;
+  int i, j, k;
+  double var  = 0.0;
+  double lvar = 0.0;
   
   Xmin  = Ymin  =  1e100;
   Xmax  = Ymax  = -1e100;
   LXmin = LYmin =  1e100;
+  LLXmin= LLYmin=  1e100;
   
-  for(i = 0; i < N; i++) {
-    if(Data[i].L != oldL) { /* Next dataset */
-      oldL = Data[i].L;
-      Lx   = pow(Data[i].L, ExpX);
-      Ly   = pow(Data[i].L, ExpY);
+  for(i = 0; i < S; i++) {
+    Set_t *s  = &Set[i];
+    double Lx = pow(s->L, ExpX);
+    double Ly = pow(s->L, ExpY);
+    
+    for(j = 0; j < s->N; j++) {
+      Data_t *d = &s->Data[j];
+      double x  = d->x[0] = (d->T - Tc) * Lx;
+      double y  = d->x[1] =  d->M       * Ly;
+      
+      d->lx[0] = log(x);
+      d->lx[1] = log(y);
+      
+      if(x < Xmin) Xmin = x;
+      if(y < Ymin) Ymin = y;
+      if(x > Xmax) Xmax = x;
+      if(y > Ymax) Ymax = y;
+      if(x > 0 && x < LXmin) LXmin = x;
+      if(y > 0 && y < LYmin) LYmin = y;
+      if(x > 0 && y > 0) { /* 4 loglog plots */
+	if(x < LLXmin) LLXmin = x;
+	if(y < LLYmin) LLYmin = y;
+      }
     }
-    
-    x = Data[i].x[0] = (Data[i].T - Tc) * Lx;
-    y = Data[i].x[1] =  Data[i].M       * Ly;
-    
-    Data[i].lx[0] = log(x);
-    Data[i].lx[1] = log(y);
-    
-    Xmin = MIN(Xmin, x);
-    Ymin = MIN(Ymin, y);
-    Xmax = MAX(Xmax, x);
-    Ymax = MAX(Ymax, y);
-    if(x > 0) LXmin = MIN(LXmin, x);
-    if(y > 0) LYmin = MIN(LYmin, y);
   }
   
+  LXmin = log(LXmin);
+  LYmin = log(LYmin);
+  
+  LXmax = log(Xmax);
+  LYmax = log(Ymax);
+  
+  LLXmin= log(LLXmin);
+  LLYmin= log(LLYmin);
+  
 #ifdef DEBUG
-  fprintf(stderr, "%g %g %g %g %g %g\n",
-	  Xmin, Xmax, Ymin, Ymax, LXmin, LYmin);
+  fprintf(stderr, "%g %g %g %g  %g %g %g %g  %g %g\n",
+	  Xmin,  Xmax,  Ymin,  Ymax, 
+	  LXmin, LXmax, LYmin, LYmax,
+	  LLXmin, LLYmin);
 #endif
   
 #ifdef BEWERT
-  for(i = 0; i < N; i++) for(j = 0; j < N; j++) {
-    double r[2];
-    r[0] = (Data[i].x[0] - Data[j].x[0]) / (Xmax - Xmin);
-    r[1] = (Data[i].x[1] - Data[j].x[1]) / (Ymax - Ymin);
-    s += exp(-ExpT*(r[0]*r[0] + r[1]*r[1]));
+  for(i = 0; i < S; i++) {
+    Set_t *s  = &Set[i];
+    
+    for(k = 0; k < ASZ * (s->Data[0].x[0] - Xmin)/(Xmax - Xmin); k++) {
+      s->A[k] = 11.11;
+    }
+    for(j = 1; j < s->N; j++) {
+      double m, y;
+      m = (s->Data[j].x[1] - s->Data[j-1].x[1])
+	/ (s->Data[j].x[0] - s->Data[j-1].x[0]);
+      y = s->Data[j-1].x[1];
+      
+      for(; k < ASZ * (s->Data[j].x[0] - Xmin)/(Xmax - Xmin); k++) {
+	s->A[k] = 
+	  y + m * (k * (Xmax - Xmin) / ASZ - (s->Data[j-1].x[0] - Xmin));
+      }
+    }
+    for(; k < ASZ; k++) {
+      s->A[k] = 11.11;
+    }
+    
+    for(k = 0; k < ASZ * (s->Data[0].lx[0] - LXmin)/(LXmax - LXmin); k++) {
+      s->lA[k] = 11.11;
+    }
+    for(j = 1; j < s->N; j++) {
+      double m = (s->Data[j].lx[1] - s->Data[j-1].lx[1])
+	/        (s->Data[j].lx[0] - s->Data[j-1].lx[0]);
+      double y = s->Data[j-1].lx[1];
+      
+      for(; k < ASZ * (s->Data[j].lx[0] - LXmin)/(LXmax - LXmin); k++) {
+	s->lA[k] =
+	  y + m * (k * (LXmax - LXmin) / ASZ - (s->Data[j-1].lx[0] - LXmin));
+      }
+    }
+    for(; k < ASZ; k++) {
+      s->lA[k] = 11.11;
+    }
   }
-  printf("Sum = %g\n", s/(N*N));
+  
+  for(k = 0; k < ASZ; k++) {
+    int m    = 0;
+    int lm   = 0;
+    
+    Mean[k]  = 0.0;
+    Var[k]   = 0.0;
+    LMean[k] = 0.0;
+    LVar[k]  = 0.0;
+    for(i = 0; i < S; i++) {
+      if(Set[i].A[k] != 11.11) {
+	Mean[k] += Set[i].A[k];
+	Var[k]  += Set[i].A[k] * Set[i].A[k];
+	m++;
+      }
+      /*printf("%d %d %g %g %g\n", i, k, Set[i].A[k], Mean[k], Var[k]);*/
+      if(Set[i].lA[k] != 11.11) {
+	LMean[k] += Set[i].lA[k];
+	LVar[k]  += Set[i].lA[k] * Set[i].lA[k];
+	lm++;
+      }
+    }
+    Mean[k] /= m;
+    Var[k]  /= m;
+    Var[k]   = Var[k] - Mean[k] * Mean[k];
+    if(m == 1) Var[k] = 0.0;
+    var += Var[k];
+    
+    LMean[k] /= lm;
+    LVar[k]  /= lm;
+    LVar[k]   = LVar[k] - LMean[k] * LMean[k];
+    if(lm == 1) LVar[k] = 0.0;
+    lvar += LVar[k];
+#ifdef DEBUG
+    printf("%g %g %g %g\n", 
+	   Mean[k], Var[k], LMean[k], LVar[k]);
+#endif
+  }
+  printf("var = %g, lvar = %g\n",
+	 var / ASZ, lvar / ASZ);
 #endif
 }
 
@@ -273,7 +417,6 @@ void enddraw(void) {
 void Draw(void) {
   int i, j;
   char text[256];
-  double oldL = 47.11;
   double tdx, tdy, x, y;
   
   winset(MainW);
@@ -291,10 +434,14 @@ void Draw(void) {
   winset(PlotW);
   
   if(AutoScale) {
-    OXmin = LogX ? log(LXmin) : Xmin;
-    OXmax = LogX ? log( Xmax) : Xmax;
-    OYmin = LogY ? log(LYmin) : Ymin;
-    OYmax = LogY ? log( Ymax) : Ymax;
+    OXmin = LogX ? LXmin : Xmin;
+    OXmax = LogX ? LXmax : Xmax;
+    OYmin = LogY ? LYmin : Ymin;
+    OYmax = LogY ? LYmax : Ymax;
+    if(LogX && LogY) {
+      OXmin = LLXmin;
+      OYmin = LLYmin;
+    }
     OXmin -= 0.05 * (OXmax - OXmin);
     OXmax += 0.05 * (OXmax - OXmin);
     OYmin -= 0.05 * (OYmax - OYmin);
@@ -348,34 +495,76 @@ void Draw(void) {
     color(GRAY);
   }
   
-  for(i = j = 0; i < N; i++) {
-    double x[2];
-    if(Data[i].L != oldL) { /* Next dataset */
-      oldL = Data[i].L;
-      
-      winset(MainW);
-      color(Colors[j % (sizeof(Colors)/sizeof(Colors[0]))]);
-      sprintf(text, " %g", Data[i].L); charstr(text);
-      
-      winset(PlotW);
-      enddraw();
-      color(Colors[j % (sizeof(Colors)/sizeof(Colors[0]))]);
-      j++;
-    }
+  for(i = 0; i < S; i++) {
+    Set_t *s  = &Set[i];
     
-    if(LogX && (Data[i].x[0] <= 0.0) ||
-       LogY && (Data[i].x[1] <= 0.0)) {
-      /* Point is not a number */
+    winset(MainW);
+    color(s->color);
+    sprintf(text, " %g", s->L);
+    charstr(text);
+    
+    winset(PlotW);
+    color(s->color);
+    
+    for(j = 0; j < s->N; j++) {
+      Data_t *d = &s->Data[j];
+      double x[2];
+      
+      if(LogX && (d->x[0] <= 0.0) ||
+	 LogY && (d->x[1] <= 0.0)) {
+	/* Point is not a number, don't draw */
+	enddraw();
+      } else {
+	/* All OK */
+	x[0] = LogX ? d->lx[0] : d->x[0];
+	x[1] = LogY ? d->lx[1] : d->x[1];
+	bgndraw();
+	v2d(x);
+      }
+    }
+    enddraw();
+  }
+  
+#ifdef BEWERT
+  color(RED);
+  bgndraw();
+  for(j = 0; j < ASZ; j++) {
+    double x[2];
+    x[0] = Xmin + j * (Xmax - Xmin) / ASZ;
+    x[1] = Var[j];
+    
+    if(LogX && (x[0] <= 0.0) ||
+       LogY && (x[1] <= 0.0)) {
+      /* Point is not a number, don't draw */
       enddraw();
     } else {
-      /* All OK */
-      x[0] = LogX ? Data[i].lx[0] : Data[i].x[0];
-      x[1] = LogY ? Data[i].lx[1] : Data[i].x[1];
+      x[0] = LogX ? log(x[0]) : x[0];
+      x[1] = LogY ? log(x[1]) : x[1];
       bgndraw();
       v2d(x);
     }
   }
   enddraw();
+  
+  color(YELLOW);
+  bgndraw();
+  for(j = 0; j < ASZ; j++) {
+    double x[2];
+    x[0] = LXmin + j * (LXmax - LXmin) / ASZ;
+    x[1] = LVar[j];
+    if(LogY && (x[1] <= 0.0)) {
+      /* Point is not a number, don't draw */
+      enddraw();
+    } else {
+      x[0] = LogX ? x[0] : exp(x[0]);
+      x[1] = LogY ? log(x[1]) : x[1];
+      bgndraw();
+      v2d(x);
+    }
+  }
+  enddraw();
+#endif
+  
   swapbuffers();
 }
 
@@ -430,11 +619,13 @@ void Selector(double*xmin, double*xmax, double*ymin, double*ymax) {
   ob = (-1.0-M[3][1])/M[1][1];
   ot = ( 1.0-M[3][1])/M[1][1];
   
-  qread(&mx);
-  qread(&my);
+  qread(&mx); mx -= ox;
+  qread(&my); my -= oy;
   
-  r1x = ol + (or - ol) * (double)(mx - ox - vl) / (vr - vl);
-  r1y = ob + (ot - ob) * (double)(my - oy - vb) / (vt - vb);
+  if(mx < vl || mx > vr || my < vb || my > vt) return; /* Not in viewport */
+  
+  r1x = ol + (or - ol) * (double)(mx - vl) / (vr - vl);
+  r1y = ob + (ot - ob) * (double)(my - vb) / (vt - vb);
   
   r2x = r1x;
   r2y = r1y;
@@ -442,11 +633,11 @@ void Selector(double*xmin, double*xmax, double*ymin, double*ymax) {
 #ifdef DEBUG
   printf("(%g %g %g %g) {%d %d} %d %d  (%d %d %d %d) -> (%g %g)\n",
 	 ol, or, ob, ot, ox, oy,
-	 m1x - ox, m1y - oy, vl, vr, vb, vt, r1x, r1y);
+	 mx, my, vl, vr, vb, vt, r1x, r1y);
 #endif
   
   frontbuffer(1);
-  color(7);
+  color(0);
   logicop(LO_XOR);
   
   do {
@@ -454,12 +645,12 @@ void Selector(double*xmin, double*xmax, double*ymin, double*ymax) {
     rect(r1x, r1y, r2x, r2y);	/* Remove old rect */
     switch(dev) {
     case MOUSEX:
-      mx = val;
-      r2x = ol + (or - ol) * (double)(mx - ox - vl) / (vr - vl);
+      mx = val - ox;
+      r2x = ol + (or - ol) * (double)(mx - vl) / (vr - vl);
       break;
     case MOUSEY:
-      my = val;
-      r2y = ob + (ot - ob) * (double)(my - oy - vb) / (vt - vb);
+      my = val - oy;
+      r2y = ob + (ot - ob) * (double)(my - vb) / (vt - vb);
       break;
     case LEFTMOUSE:
       break;
@@ -511,10 +702,18 @@ void ProcessQueue(void) {
     ShowPos(mx, my, showpos);
     break;
   case LEFTMOUSE:
-    AutoScale = 0;
-    winset(PlotW);
-    Selector(&OXmin, &OXmax, &OYmin, &OYmax);
-    rd = 1;
+    if(val == 1) {
+      AutoScale = 0;
+      winset(PlotW);
+      Selector(&OXmin, &OXmax, &OYmin, &OYmax);
+      rd = 1;
+    }
+    break;
+  case MIDDLEMOUSE:
+    if(val == 1) {
+      AutoScale = 1;
+      rd = 1;
+    }
     break;
   case RIGHTMOUSE:
 #define ZOOMOUT 0.6
@@ -623,8 +822,5 @@ int main(int argc, char *argv[]) {
   GraphInit();
   ReadData();
   Calculate();
-  /*Draw();*/
-  while(1) {
-    ProcessQueue();
-  };
+  while(1) ProcessQueue();
 }
