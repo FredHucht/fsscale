@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995-2002
  *
- * $Id: fsscale.c,v 2.60 2002-08-15 14:12:54+02 fred Exp fred $
+ * $Id: fsscale.c,v 2.61 2002-08-15 15:31:15+02 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.61  2002-08-15 15:31:15+02  fred
+ * Added -p params file support
+ *
  * Revision 2.60  2002-08-15 14:12:54+02  fred
  * Added wheel mouse
  *
@@ -192,7 +195,7 @@
  */
 /*#pragma OPTIONS inline+Pow*/
 
-char   *RCSId = "$Id: fsscale.c,v 2.60 2002-08-15 14:12:54+02 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.61 2002-08-15 15:31:15+02 fred Exp fred $";
 
 /* Note: AIX: Ignore warnings "No function prototype given for 'finite'"
  * From math.h:
@@ -262,7 +265,6 @@ typedef struct NumParams_ {
   int    LogX, LogY;
   int    AV;
   int    VarType;
-  int    ReduceT;
   int    AutoExp;
   int    FitFak;
   int    Bewert;
@@ -290,6 +292,7 @@ typedef struct NumParams_ {
   double VarFactor;
   double Vardummy,
     /**/d, L0, Xf, Tc, Z, Lz, Lc, X, Dx, Lx, LLx, Lsf, Xs, Lxs, Yf, Mc, U, Du, Y, Dy, Ly, LLy, M, Lm;
+  double ReduceT; /* Must be behind Vars for Read/WriteVars */
 } NumParams;
 enum ActiveNames {
   AOff,Ad,AL0,AXf,ATc,AZ,ALz,ALc,AX,ADx,ALx,ALLx,ALsf,AXs,ALxs,AYf,AMc,AU,ADu,AY,ADy,ALy,ALLy,AM,ALm,
@@ -323,7 +326,8 @@ struct Defaults_ {
 		"Ly",  0,
 		"LLy", 0,
 		"M",   0,
-		"Lm",  0
+		"Lm",  0,
+		"ReduceT", 0
 };
 
 enum RecalcNames {
@@ -403,13 +407,22 @@ void WriteVars(const NumParams *p) {
   const double *Vars = &p->Vardummy;
   int a, n = 0, fail = 0;
   FILE *tn;
-  tn = fopen(p->VarsFile, "a");
+  char bakfile[256];
+  snprintf(bakfile, sizeof(bakfile), "%s%s", p->VarsFile, "~");
+  if (0 != rename(p->VarsFile, bakfile)) {
+    perror(p->VarsFile);
+    fail = 1;
+  }
+  if (fail == 0) {
+    tn = fopen(p->VarsFile, "w");
+  }
   if (tn == 0) {
     perror(p->VarsFile);
     tn = stdout;
     fail = 1;
   }
-  for (a = 1; a < ALast; a++) {
+  
+  for (a = 1; a < sizeof(Defaults) / sizeof(Defaults[0]); a++) {
     struct Defaults_ *def = &Defaults[a];
     if (def->val != Vars[a]) {
       fprintf(tn, "%s = %g\n", def->name, Vars[a]);
@@ -433,7 +446,7 @@ void ReadVars(NumParams *p) {
       double val;
       if (2 == fscanf(tn, "%s = %lf", name, &val)) {
 	/* printf("%s == %g\n", name, val); */
-	for (a = 1; a < ALast; a++) {
+	for (a = 1; a < sizeof(Defaults) / sizeof(Defaults[0]); a++) {
 	  if (strcmp(name, Defaults[a].name) == 0) {
 	    Vars[a] = val;
 	  }
@@ -460,7 +473,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.60 $ (C) Fred Hucht 1995-2002\n"
+	    "$Revision: 2.61 $ (C) Fred Hucht 1995-2002\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension L\n"
@@ -846,7 +859,7 @@ void Calculate(NumParams *p) {
       Data_t *d  = &s->Data[Lx > 0 ? j : s->N - 1 - j];
       double t = ds->T - p->Tc;
       
-      if (p->ReduceT && p->Tc) t /= p->Tc;
+      if (p->ReduceT != 0 && p->Tc) t /= p->Tc;
       
       if (s->L == 0) { /* scaling function */
 	d->x = ds->T;
@@ -1138,7 +1151,7 @@ void WriteTerm(const NumParams *p, GraphParams *g,
     }
     
     if (Vars[alc] || ((all || CI(alc)) && alc0)) {
-      if (p->ReduceT && alc == ATc && Vars[alc]) {
+      if (p->ReduceT != 0 && alc == ATc && Vars[alc]) {
 	sprintf(lmlc, "%s(%s/#%c%g#0-1)",
 		func ? func : "", name, CI(alc) + '0', Vars[alc]);
       } else {
@@ -1938,20 +1951,19 @@ void ProcessQueue(NumParams *p, GraphParams *g) {
     case 'a': g->AutoScale = 1; todo = ReWr; break;
     case 'A': g->AutoScale = 0; break;
     case 'R':
-      p->X  = p->X_o;
-      p->Y  = p->Y_o;
-      p->M  = p->M_o;
-      p->Tc = p->Tc_o;
-      p->Lc = p->Mc = 0;
-      p->Z  = p->U = 1;
-      p->Lx = p->Ly = p->Lm = p->Lz = p->LLx = p->LLy = 0;
-      p->Dx = p->Dy = p->Du = 0;
-      p->L0 = p->Xf = p->Yf = 1.0;
-      p->Lsf = 0; p->Xs = 0; p->Lxs = 0;
-      g->Active = p->AutoExp = AOff;
-      activei = 0;
-      todo  = ReCa;
-      break;
+      {
+	int a;
+	double *Vars = &p->Vardummy;
+	for (a = 1; a < ALast; a++) Vars[a] = Defaults[a].val;
+	p->X  = p->X_o;
+	p->Y  = p->Y_o;
+	p->M  = p->M_o;
+	p->Tc = p->Tc_o;
+	g->Active = p->AutoExp = AOff;
+	activei = 0;
+	todo  = ReCa;
+	break;
+      }
     case 'c': p->Lc += p->d; INTCHECK(p->Lc); todo = ReCa; break;
     case 'C': p->Lc -= p->d; INTCHECK(p->Lc); todo = ReCa; break;
     case 't': p->Tc += p->d; INTCHECK(p->Tc); todo = ReCa; break;
@@ -1971,7 +1983,7 @@ void ProcessQueue(NumParams *p, GraphParams *g) {
     case 'b': p->Beta+=p->d; INTCHECK(p->Beta);todo= ReCaBN; break;
     case 'B': p->Beta-=p->d; INTCHECK(p->Beta);todo= ReCaBN; break;
     case '#': g->ShowNuBeta ^= 1;            todo = ReMa; break;
-    case '/': p->ReduceT    ^= 1;            todo = ReCa; break;
+    case '/': p->ReduceT = 1 - p->ReduceT;   todo = ReCa; break;
     case 'r': ReverseVideo(g);               todo = ReWr; break;
     case 'l': g->Lines = (g->Lines + 1) % 3; todo = ReWr; break;
     case 'g': g->Grid ^= 1;                  todo = ReWr; break;
