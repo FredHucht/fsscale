@@ -1,10 +1,13 @@
 /* -*- mode: c;  c-basic-offset: 2 -*-
  * 
- * Finite Size scaling (C) Fred Hucht 1995-1998
+ * Finite Size scaling (C) Fred Hucht 1995-2000
  *
- * $Id: fsscale.c,v 2.42 2000-05-18 19:05:08+02 fred Exp fred $
+ * $Id: fsscale.c,v 2.43 2000-11-03 09:58:41+01 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.43  2000-11-03 09:58:41+01  fred
+ * ShowNuBeta also in xmgr/gnuplot output
+ *
  * Revision 2.42  2000-05-18 19:05:08+02  fred
  * Added key '#'
  *
@@ -134,7 +137,9 @@
  */
 /*#pragma OPTIONS inline+Pow*/
 
-char   *RCSId = "$Id: fsscale.c,v 2.42 2000-05-18 19:05:08+02 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.43 2000-11-03 09:58:41+01 fred Exp fred $";
+
+/* Note: AIX: Ignore warnings "No function prototype given for 'finite'" See math.h, line 429 */
 
 #include <X11/Ygl.h>
 #include <stdio.h>
@@ -314,7 +319,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.42 $ (C) Fred Hucht 1995-1998\n"
+	    "$Revision: 2.43 $ (C) Fred Hucht 1995-1998\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
