@@ -5,6 +5,9 @@
  * $Id: fsscale.c,v 2.26 1998/02/03 12:31:02 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.28  1998-02-09 15:40:21+01  fred
+ * ExpB -> ExpD, DBL_MAX, some minors
+ *
  * Revision 2.26  1998/02/03 12:31:02  fred
  * xmgr output now has world coordinates (no autoscale)
  *
@@ -287,7 +290,7 @@ void Usage(int verbose) {
 	      "                     suszeptibility (with -g) M\n"*/
 	    "\n"
 	    "X-Axis is scaled as X = (T - Tc)^z * (L - Lc)^x      \n"
-	    "Y-Axis is scaled as Y = (M - Mc)^u * L^y * (T - Tc)^m\n"
+	    "Y-Axis is scaled as Y = (M - Mc)^u * (L - Lc)^y * (T - Tc)^m\n"
 	    "Additional scaling available via numpad keys (see below).\n"
 	    /*"Y-Axis is scaled as  M       * L^y  ( y = Beta/Ny or y = -Gamma/Ny )\n"*/
 	    "\n"
@@ -297,9 +300,9 @@ void Usage(int verbose) {
 	    "  -y <y>              Preset Exponent y (default: 1)\n"
 	    "  -m <m>              Preset Exponent m (default: 1)\n"
 	    "  -A <i1,i2,...>      Define which variables can be activated using\n"
-	    "                      pad4/pad6 (see below). Use 2,5,11 for Tc,x,y\n"
+	    "                      pad4/pad6 (see below). Use 2,5,12 for Tc,x,y\n"
 	    "                      1:Xsign 2:Tc  3:z  4:Lc 5:x\n"
-	    "                      8:Ysign 9:Mc 10:u 11:y 14:m (default: all)\n"
+	    "                      8:Ysign 9:Mc 10:u 12:y 15:m (default: all)\n"
 	    "  -4                  Input has 4 columns, 4th is called D by default.\n"
 	    "                      D appears in several exponents of the scaling function\n"
 	    "                      using the keypad keys.\n"
@@ -319,10 +322,12 @@ void Usage(int verbose) {
 	    "\n"
 	    "  Keys pad4/pad6:     Change active variable. The active variable\n"
 	    "                      is highlighted in the formula and can be changed\n"
-	    "                      with the keypad keys 1,2,3,7,8,9.\n"
-	    "  Keys pad1/pad7:     Change active variable by  10 * d\n"
-	    "  Keys pad2/pad8:     Change active variable by       d\n"
-	    "  Keys pad3/pad9:     Change active variable by 0.1 * d\n"
+	    "                      with the keypad keys 1,2,3,7,8,9. The index of the\n"
+	    "                      active variable is displayed in the lower right\n"
+	    "                      corner (see option -A).\n"
+	    "  Keys pad1/pad7:     Change activated variable by  10 * d\n"
+	    "  Keys pad2/pad8:     Change activated variable by       d\n"
+	    "  Keys pad3/pad9:     Change activated variable by 0.1 * d\n"
 	    "\n"
 	    "  Arrow left|right:   Change exponent x:       x -=|+= d\n"
 	    "  Arrow up|down:      Change exponent y:       y -=|+= d\n"
@@ -552,9 +557,9 @@ void Calculate(void) {
   Ymax = YmaxXp = -DBL_MAX;
   
   for (i = 0; i < S; i++) if (Set[i].active) {
-    Set_t *s   = &Set[i];
-    double Lx  = XFak * pow(s->L - Lc, ExpX + ExpDx * s->D) * pow(log(s->L), ExpLx);
-    double Ly  = YFak * pow(s->L,      ExpY + ExpDy * s->D) * pow(log(s->L), ExpLy);
+    Set_t *s  = &Set[i];
+    double Lx = XFak * pow(s->L - Lc, ExpX + ExpDx * s->D) * pow(log(s->L), ExpLx);
+    double Ly = YFak * pow(s->L - Lc, ExpY + ExpDy * s->D) * pow(log(s->L), ExpLy);
     
     for (j = 0; j < s->N; j++) {
       Data_t *d = &s->Data[j];
@@ -843,6 +848,14 @@ void Draw(void) {
   winset(MainW);
   color(BgColor);
   clear();
+  
+  if (Active) {
+    sprintf(text, "%d", Active);
+    cmov2(XSize - FRAME - strwidth(text), 2 * FontH + FontD);
+    color(GREEN);
+    charstrC(text);
+  }
+  
   color(FgColor);
   cmov2(FRAME, 2 * FontH + FontD);
   
@@ -870,13 +883,13 @@ void Draw(void) {
   }
   
   /* * (L - Lc) */
-  if (ExpDx || ExpX || Lc || Active == ALc || Active == AX || Active == ADx) {
+  if (ExpX || ExpDx || Active == ALc || Active == AX || Active == ADx) {
     charstrC(" * ");
     charstrC(lmlc);
     ncx += sprintf(Xlab + ncx, " * %s", lmlc);
     
     /* ^(x + Dy D) */
-    switch(2 * (ExpX || Active == AX) + (ExpDx || Active == ADx)) {
+    switch(2 * (ExpX || Active == AX || Active == ALc) + (ExpDx || Active == ADx)) {
     case 3: /* Both */
       sprintf(text, "(#%c%g#%c%+g#0*%s)",
 	      (Active == AX ) + '0', ExpX,
@@ -900,7 +913,7 @@ void Draw(void) {
     }
   }
   
-  /* * ExpLx * log(L) */
+  /* * log(L)^ExpLx */
   if (ExpLx || Active == ALx) {
     sprintf(text, " * log(%s)", Names[0]);
     charstrC(text);
@@ -920,7 +933,7 @@ void Draw(void) {
   ncy += sprintf(Ylab + ncy, "%s%s", YFak == 1.0 ? "" : "-", mmmc);
   
   /* ^(u + Du D) */
-  switch(2 * (ExpU || Active == AU) + (ExpDu || Active == ADu)) {
+  switch(2 * (ExpU || Active == AU || Active == AMc) + (ExpDu || Active == ADu)) {
   case 3: /* Both */
     sprintf(text, "(#%c%g#%c%+g#0*%s)",
 	    (Active == AU ) + '0', ExpU,
@@ -949,11 +962,11 @@ void Draw(void) {
     ncy += sprintf(Ylab + ncy, "\\S%g\\N", ExpU);
   }
 #endif
-  /* * L */
-  if (ExpDy || ExpY || Active == AY || Active == ADy) {
+  /* * (L - Lc) */
+  if (ExpY || ExpDy || Active == AY || Active == ADy) {
     charstrC(" * ");
-    charstrC(Names[0]);
-    ncy += sprintf(Ylab + ncy, " * %s", Names[0]);
+    charstrC(lmlc);
+    ncy += sprintf(Ylab + ncy, " * %s", lmlc);
     
     /* ^(y + Dy D) */
     switch(2 * (ExpY || Active == AY) + (ExpDy || Active == ADy)) {
@@ -980,7 +993,7 @@ void Draw(void) {
     }
   }
   
-  /* * ExpLy * log(L) */
+  /* * log(L)^ExpLy */
   if (ExpLy || Active == ALy) {
     sprintf(text, " * log(%s)", Names[0]);
     charstrC(text);
@@ -1007,7 +1020,7 @@ void Draw(void) {
   }
   
   cmov2(FRAME, FontH + FontD);
-  sprintf(text, "%s = ", Names[0]); charstrC(text);
+  sprintf(text, "%s =", Names[0]); charstrC(text);
   
   winset(PlotW);
   
