@@ -1,10 +1,13 @@
 /* -*- mode: c;  c-basic-offset: 2 -*-
  * 
- * Finite Size scaling (C) Fred Hucht 1995-2001
+ * Finite Size scaling (C) Fred Hucht 1995-2002
  *
- * $Id: fsscale.c,v 2.56 2002-06-05 11:11:35+02 fred Exp fred $
+ * $Id: fsscale.c,v 2.57 2002/06/05 14:34:16 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.57  2002/06/05 14:34:16  fred
+ * *** empty log message ***
+ *
  * Revision 2.56  2002-06-05 11:11:35+02  fred
  * Added new log corrections, added reduced temperature '/', removed "*"
  * in labels
@@ -179,9 +182,14 @@
  */
 /*#pragma OPTIONS inline+Pow*/
 
-char   *RCSId = "$Id: fsscale.c,v 2.56 2002-06-05 11:11:35+02 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.57 2002/06/05 14:34:16 fred Exp fred $";
 
-/* Note: AIX: Ignore warnings "No function prototype given for 'finite'" See math.h, line 429 */
+/* Note: AIX: Ignore warnings "No function prototype given for 'finite'"
+ * From math.h:
+ * The POWER wants arguments in both GPR's and FPR's
+ * By not specifying a prototype of double, the compiler
+ * will put the argument in both types of registers.
+ */
 
 #include <X11/Ygl.h>
 #include <stdio.h>
@@ -193,8 +201,6 @@ char   *RCSId = "$Id: fsscale.c,v 2.56 2002-06-05 11:11:35+02 fred Exp fred $";
 #include <signal.h>
 #include <unistd.h>
 #include <time.h>
-
-extern int finite(double);
 
 #ifndef MAX
 # define MAX(a, b) ((a) > (b) ? (a) : (b))
@@ -270,17 +276,12 @@ typedef struct NumParams_ {
   double Tc_o, X_o, Y_o, M_o;
   double Ny;
   double Beta;
-  
-  double Vardummy, d,
-    Xf,  Tc,  Z,  Lz,  Lc,   X,  Dx,   Lx,  LLx,  Lsf,  Xs,  Lxs,
-    Yf,  Mc,  U,  Du,   Y,  Dy,  Ly,  LLy,    M,  Lm;
   double VarFactor;
+  double Vardummy,
+    /**/d, L0, Xf, Tc, Z, Lz, Lc, X, Dx, Lx, LLx, Lsf, Xs, Lxs, Yf, Mc, U, Du, Y, Dy, Ly, LLy, M, Lm;
 } NumParams;
-
 enum ActiveNames {
-  AOff, Ad,
-  AXf,  ATc, AZ, ALz, ALc,  AX, ADx,  ALx, ALLx, ALsf, AXs, ALxs,
-  AYf,  AMc, AU, ADu,  AY, ADy, ALy, ALLy,   AM, ALm,
+  AOff,Ad,AL0,AXf,ATc,AZ,ALz,ALc,AX,ADx,ALx,ALLx,ALsf,AXs,ALxs,AYf,AMc,AU,ADu,AY,ADy,ALy,ALLy,AM,ALm,
   ALast
 };
 
@@ -369,7 +370,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.56 $ (C) Fred Hucht 1995-2002\n"
+	    "$Revision: 2.57 $ (C) Fred Hucht 1995-2002\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
@@ -737,7 +738,7 @@ void Calculate(NumParams *p) {
   
   for (i = 0; i < p->S; i++) if (p->Set[i].active) {
     Set_t *s  = &p->Set[i];
-    double l  = s->L - p->Lc;
+    double l  = s->L / p->L0 - p->Lc;
     double Lx = p->Xf * Pow(l, p->X + p->Dx * s->D) * PowLog(l, p->Lx) * PowLogLog(l, p->LLx);
     double Ly = p->Yf * Pow(l, p->Y + p->Dy * s->D) * PowLog(l, p->Ly) * PowLogLog(l, p->LLy);
     double Ls = p->Lsf * Pow(l, p->Xs) * PowLog(l, p->Lxs);
@@ -1130,6 +1131,11 @@ void DrawMain(const NumParams *p, GraphParams *g) {
   sprintf(text, "#%c%g#0", CI(Ad) + '0', p->d);
   charstrP(text, 0, &g->cpos[Ad]);
   
+  if (g->ShowZero || CI(AL0) || p->L0 != 1.0) {
+    sprintf(text, "; %s /= #%c%g#0", g->Names[0], CI(AL0) + '0', p->L0);
+    charstrC(text);
+  }
+  
   sprintf(text, "; X = #%c%s#0", CI(AXf) + '0',
 	  p->Xf < 0.0 ? "-" : CI(AXf) ? "+" : "");
   charstrC(text);
@@ -1209,6 +1215,7 @@ void checked_v2d(const NumParams *p, double x0, double x1, double dm[2][2]) {
       x[0] < dm[0][0] || x[0] > dm[0][1] ||
       x[1] < dm[1][0] || x[1] > dm[1][1]) {
     /* Point is NaNQ or too far away, don't draw */
+    /* fprintf(stderr, "%g %g %g %g\n", x0, x1, x[0], x[1]); */
     bgnenddraw(0);
   } else {
     /* All OK */
@@ -1807,7 +1814,7 @@ void ProcessQueue(NumParams *p, GraphParams *g) {
       p->Z  = p->U = 1;
       p->Lx = p->Ly = p->Lm = p->Lz = p->LLx = p->LLy = 0;
       p->Dx = p->Dy = p->Du = 0;
-      p->Xf = p->Yf = 1.0;
+      p->L0 = p->Xf = p->Yf = 1.0;
       p->Lsf = 0; p->Xs = 0; p->Lxs = 0;
       g->Active = p->AutoExp = AOff;
       activei = 0;
@@ -2249,7 +2256,7 @@ int main(int argc, char *argv[]) {
     "-*-Times-Medium-R-Normal--*-120-*-*-*-*-*-*",
     {"L", "T", "M", "D"},
     {0.02, 0.01},
-    {AOff, Ad,
+    {AOff, Ad, AL0,
      AXf, ATc, AZ, ALz, ALc, AX,       ALx, ALLx, ALsf, AXs, ALxs,
      AYf, AMc, AU,       AY,     ALy, ALLy,   AM, ALm}
   };
@@ -2264,9 +2271,10 @@ int main(int argc, char *argv[]) {
   
   memset(&P, 0, sizeof(NumParams));
   P.Progname = argv[0];
-  P.d = 0.1;
-  P.Z = 1.0;
-  P.U = 1.0;
+  P.d  = 0.1;
+  P.L0 = 1.0;
+  P.Z  = 1.0;
+  P.U  = 1.0;
   P.Xf = 1.0;
   P.Yf = 1.0;
   P.Ny = 1.0 / P.X;
