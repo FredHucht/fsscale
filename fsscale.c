@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995-2002
  *
- * $Id: fsscale.c,v 2.57 2002/06/05 14:34:16 fred Exp fred $
+ * $Id: fsscale.c,v 2.58 2002-07-09 14:01:55+02 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.58  2002-07-09 14:01:55+02  fred
+ * Added L0 for log corrections, fixed finite() prototype under AIX
+ *
  * Revision 2.57  2002/06/05 14:34:16  fred
  * *** empty log message ***
  *
@@ -182,7 +185,7 @@
  */
 /*#pragma OPTIONS inline+Pow*/
 
-char   *RCSId = "$Id: fsscale.c,v 2.57 2002/06/05 14:34:16 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.58 2002-07-09 14:01:55+02 fred Exp fred $";
 
 /* Note: AIX: Ignore warnings "No function prototype given for 'finite'"
  * From math.h:
@@ -370,11 +373,11 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.57 $ (C) Fred Hucht 1995-2002\n"
+	    "$Revision: 2.58 $ (C) Fred Hucht 1995-2002\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
-	    "  1. Column:         scaling parameter, normally linear dimension\n"
-	    "                     of the system L\n"
+	    "  1. Column:         scaling parameter, normally linear dimension L\n"
+	    "                     of the system. Use L=0 for scaling function\n"
 	    "  2. Column:         ordinate, normally temperature T\n"
 	    "  3. Column:         coordinate, normally magnetisation M\n"
 	    "NOTE: The data should be sorted with respect to column 1.\n"
@@ -576,6 +579,7 @@ void GraphInit(GraphParams *g) {
     UPARROWKEY,   DOWNARROWKEY,
     LEFTARROWKEY, RIGHTARROWKEY,
     PAGEUPKEY,    PAGEDOWNKEY,
+    HOMEKEY, ENDKEY, INSERTKEY,    
     LEFTSHIFTKEY, RIGHTSHIFTKEY,
     LEFTALTKEY,   RIGHTALTKEY,
     LEFTMOUSE,    MIDDLEMOUSE,    RIGHTMOUSE,
@@ -741,7 +745,7 @@ void Calculate(NumParams *p) {
     double l  = s->L / p->L0 - p->Lc;
     double Lx = p->Xf * Pow(l, p->X + p->Dx * s->D) * PowLog(l, p->Lx) * PowLogLog(l, p->LLx);
     double Ly = p->Yf * Pow(l, p->Y + p->Dy * s->D) * PowLog(l, p->Ly) * PowLogLog(l, p->LLy);
-    double Ls = p->Lsf * Pow(l, p->Xs) * PowLog(l, p->Lxs);
+    double Ls = p->Xf * p->Lsf * Pow(l, p->Xs) * PowLog(l, p->Lxs);
     
     for (j = 0; j < s->N; j++) {
       const Data_t *ds = &s->Data[j];
@@ -750,9 +754,14 @@ void Calculate(NumParams *p) {
       
       if (p->ReduceT && p->Tc) t /= p->Tc;
       
-      d->x = Lx * Pow(t, p->Z) * PowLog(t, p->Lz) + Ls;
-      d->y = Ly * Pow(t, p->M) * PowLog(t, p->Lm)
-	* Pow(ds->M - p->Mc, p->U + p->Du * s->D);
+      if (s->L == 0) { /* scaling function */
+	d->x = ds->T;
+	d->y = ds->M;
+      } else {
+	d->x = Lx * Pow(t, p->Z) * PowLog(t, p->Lz) + Ls;
+	d->y = Ly * Pow(t, p->M) * PowLog(t, p->Lm)
+	  * Pow(ds->M - p->Mc, p->U + p->Du * s->D);
+      }
       
       if (finite(d->x) && finite(d->y)) {
 	SetMinMax(&p->XX, d->x, d->y);
@@ -1136,10 +1145,17 @@ void DrawMain(const NumParams *p, GraphParams *g) {
     charstrC(text);
   }
   
-  sprintf(text, "; X = #%c%s#0", CI(AXf) + '0',
-	  p->Xf < 0.0 ? "-" : CI(AXf) ? "+" : "");
-  charstrC(text);
-  g->Labi[0] = sprintf(g->Lab[0], "%s", p->Xf == 1.0 ? "" : "-");
+  /*sprintf(text, "; X = #%c%s#0", CI(AXf) + '0',
+    p->Xf < 0.0 ? "-" : CI(AXf) ? "+" : "");*/
+  
+  if (g->ShowZero || CI(AXf) || p->Xf != 1.0) {
+    sprintf(text, "; X/#%c%g#0 =", CI(AXf) + '0', p->Xf);
+    charstrC(text);
+    g->Labi[0] = sprintf(g->Lab[0], "%g [", p->Xf);
+  } else {
+    charstrC("; X = ");
+    g->Labi[0] = sprintf(g->Lab[0], "");
+  }
   
   /* (T - Tc)^Z */
   WriteTerm(p, g, NULL,  ATc, 1, AZ,  AOff, 0);
@@ -1161,11 +1177,22 @@ void DrawMain(const NumParams *p, GraphParams *g) {
     /* log(L - Lc)^Lxs */
     WriteTerm(p, g, "alog", ALc, 0, ALxs, AOff, 0);
   }
+  if (g->ShowZero || CI(AXf) || p->Xf != 1.0) {
+    /*charstrC("]");*/
+    g->Labi[0] += sprintf(g->Lab[0], "]");
+  }
+  /*sprintf(text, "; Y = #%c%s#0", CI(AYf) + '0',
+	  p->Yf < 0.0 ? "-" : CI(AYf) ? "+" : "");*/
+  /*g->Labi[1] = sprintf(g->Lab[1], "%s", p->Yf == 1.0 ? "" : "-");*/
   
-  sprintf(text, "; Y = #%c%s#0", CI(AYf) + '0',
-	  p->Yf < 0.0 ? "-" : CI(AYf) ? "+" : "");
-  charstrC(text);
-  g->Labi[1] = sprintf(g->Lab[1], "%s", p->Yf == 1.0 ? "" : "-");
+  if (g->ShowZero || CI(AYf) || p->Yf != 1.0) {
+    sprintf(text, "; Y/#%c%g#0 =", CI(AYf) + '0', p->Yf);
+    charstrC(text);
+    g->Labi[1] = sprintf(g->Lab[1], "%g", p->Yf);
+  } else {
+    charstrC("; Y = ");
+    g->Labi[1] = sprintf(g->Lab[1], "");
+  }
   
   /* (M - Mc)^(U + Du * D) */
   WriteTerm(p, g, NULL,  AMc, 1, AU,  ADu,  1);
@@ -1514,10 +1541,10 @@ int ChangeActive(NumParams *p, const GraphParams *g, double delta) {
     p->d *= delta > 0 ? 10.0 : 0.1;
     ret = p->AutoExp ? ReCa : ReMa;
     break;
-  case AXf:
-  case AYf:
-    Vars[g->Active] = delta > 0 ? 1.0 : -1.0;
-    break;
+    /*  case AXf:
+	case AYf:
+	Vars[g->Active] = delta > 0 ? 1.0 : -1.0;
+	break;*/
   default:
     Vars[g->Active] += delta;
     INTCHECK(Vars[g->Active]);
@@ -1755,16 +1782,19 @@ void ProcessQueue(NumParams *p, GraphParams *g) {
   case    UPARROWKEY: p->Y += p->d; INTCHECK(p->Y); todo = ReCa; break;
   case  LEFTARROWKEY: p->X -= p->d; INTCHECK(p->X); todo = ReCa; break;
   case RIGHTARROWKEY: p->X += p->d; INTCHECK(p->X); todo = ReCa; break;
-  case     PAGEUPKEY: p->M += p->d; INTCHECK(p->M); todo = ReCa; break;
-  case   PAGEDOWNKEY: p->M -= p->d; INTCHECK(p->M); todo = ReCa; break;
+    /*  case     PAGEUPKEY: p->M += p->d; INTCHECK(p->M); todo = ReCa; break;
+	case   PAGEDOWNKEY: p->M -= p->d; INTCHECK(p->M); todo = ReCa; break;*/
+  case HOMEKEY:
   case PAD4:
     activei += g->NumActive - 2;
+  case ENDKEY:
   case PAD6:
     activei = (activei + 1) % g->NumActive;
     g->Active = g->Actives[activei];
     todo    = ReMa;
     rewrite = 1;
     break;
+  case INSERTKEY:
   case PAD5:
     if (p->AutoExp == g->Active) {
       p->AutoExp = AOff;
@@ -1772,8 +1802,6 @@ void ProcessQueue(NumParams *p, GraphParams *g) {
       rewrite = 1;
     } else switch (g->Active) {
     case Ad:
-    case AXf:
-    case AYf:
       break;
     default:
       p->AutoExp = g->Active;
@@ -1781,9 +1809,11 @@ void ProcessQueue(NumParams *p, GraphParams *g) {
     }
     break;
   case PAD1: if (fak == 0) fak =  -10 * p->d;
+  case PAGEDOWNKEY: 
   case PAD2: if (fak == 0) fak =       -p->d;
   case PAD3: if (fak == 0) fak = -0.1 * p->d;
   case PAD7: if (fak == 0) fak =   10 * p->d;
+  case PAGEUPKEY: 
   case PAD8: if (fak == 0) fak =        p->d;
   case PAD9: if (fak == 0) fak =  0.1 * p->d;
     todo = ChangeActive(p, g, fak);
