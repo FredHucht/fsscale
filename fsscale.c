@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995-2002
  *
- * $Id: fsscale.c,v 2.59 2002-08-15 11:49:07+02 fred Exp fred $
+ * $Id: fsscale.c,v 2.60 2002-08-15 14:12:54+02 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.60  2002-08-15 14:12:54+02  fred
+ * Added wheel mouse
+ *
  * Revision 2.59  2002-08-15 11:49:07+02  fred
  * Added display of scaling function (loadable with L=0) and metric
  * factors
@@ -189,7 +192,7 @@
  */
 /*#pragma OPTIONS inline+Pow*/
 
-char   *RCSId = "$Id: fsscale.c,v 2.59 2002-08-15 11:49:07+02 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.60 2002-08-15 14:12:54+02 fred Exp fred $";
 
 /* Note: AIX: Ignore warnings "No function prototype given for 'finite'"
  * From math.h:
@@ -283,6 +286,7 @@ typedef struct NumParams_ {
   double Tc_o, X_o, Y_o, M_o;
   double Ny;
   double Beta;
+  char  *VarsFile;
   double VarFactor;
   double Vardummy,
     /**/d, L0, Xf, Tc, Z, Lz, Lc, X, Dx, Lx, LLx, Lsf, Xs, Lxs, Yf, Mc, U, Du, Y, Dy, Ly, LLy, M, Lm;
@@ -290,6 +294,36 @@ typedef struct NumParams_ {
 enum ActiveNames {
   AOff,Ad,AL0,AXf,ATc,AZ,ALz,ALc,AX,ADx,ALx,ALLx,ALsf,AXs,ALxs,AYf,AMc,AU,ADu,AY,ADy,ALy,ALLy,AM,ALm,
   ALast
+};
+
+struct Defaults_ {
+  char *name;
+  double val;
+} Defaults[] = {"",    0,
+		"d", 0.1,
+		"L0",  1,
+		"Xf",  1,
+		"Tc",  0,
+		"Z",   1,
+		"Lz",  0,
+		"Lc",  0,
+		"X",   0,
+		"Dx",  0,
+		"Lx",  0,
+		"LLx", 0,
+		"Lsf", 0,
+		"Xs",  0,
+		"Lxs", 0,
+		"Yf",  1,
+		"Mc",  0,
+		"U",   1,
+		"Du",  0,
+		"Y",   0,
+		"Dy",  0,
+		"Ly",  0,
+		"LLy", 0,
+		"M",   0,
+		"Lm",  0
 };
 
 enum RecalcNames {
@@ -365,9 +399,57 @@ double exp10(double x) {
   return exp(M_LN10 * x);
 }
 
+void WriteVars(const NumParams *p) {
+  const double *Vars = &p->Vardummy;
+  int a, n = 0, fail = 0;
+  FILE *tn;
+  tn = fopen(p->VarsFile, "a");
+  if (tn == 0) {
+    perror(p->VarsFile);
+    tn = stdout;
+    fail = 1;
+  }
+  for (a = 1; a < ALast; a++) {
+    struct Defaults_ *def = &Defaults[a];
+    if (def->val != Vars[a]) {
+      fprintf(tn, "%s = %g\n", def->name, Vars[a]);
+      n++;
+    }
+  }
+  if (!fail) {
+    fclose(tn);
+    fprintf(stderr, "Wrote %d vars to file '%s'.\n", n, p->VarsFile);
+  }
+}
+
+void ReadVars(NumParams *p) {
+  double *Vars = &p->Vardummy;
+  int a;
+  FILE *tn;
+  tn = fopen(p->VarsFile, "r");
+  if (tn) {
+    while (!feof(tn)) {
+      char name[128];
+      double val;
+      if (2 == fscanf(tn, "%s = %lf", name, &val)) {
+	/* printf("%s == %g\n", name, val); */
+	for (a = 1; a < ALast; a++) {
+	  if (strcmp(name, Defaults[a].name) == 0) {
+	    Vars[a] = val;
+	  }
+	}
+      }
+    }
+    fclose(tn);
+  } else {
+    perror(p->VarsFile);
+  }
+}
+
 void Usage(int verbose) {
   fprintf(stderr, 
-	  "Usage: %s [-h] [-t <Tc>] [-x <x>] [-y <y>] [-m <m>] [-lx] [-ly]\n"
+	  "Usage: %s [-h] [-p <varsfile>]\n"
+	  "               [-t <Tc>] [-x <x>] [-y <y>] [-m <m>] [-lx] [-ly]\n"
 	  "               [-N <name1,name2,name3>] [-T <title>] [-f <font>] [-r]\n"
 	  "               [-A <i1,...,in> ] [-4]\n"
 	  , Pp->Progname);
@@ -378,7 +460,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.59 $ (C) Fred Hucht 1995-2002\n"
+	    "$Revision: 2.60 $ (C) Fred Hucht 1995-2002\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension L\n"
@@ -395,6 +477,7 @@ void Usage(int verbose) {
 	    /*"Y-Axis is scaled as  M       * L^y  ( y = Beta/Ny or y = -Gamma/Ny )\n"*/
 	    "\n"
 	    "Options are:\n"
+	    "  -p <varsfile>       Read/save variables from/to file <varsfile> using key 'Q'/'W'\n"
 	    "  -t <Tc>             Preset Tc         (default: 0)\n"
 	    "  -x <x>              Preset Exponent x (default: 1)\n"
 	    "  -y <y>              Preset Exponent y (default: 1)\n"
@@ -494,7 +577,7 @@ void GetArgs(NumParams *p, GraphParams *g, int argc, char *argv[]) {
   p->NumRows = 3;
   g->NumActive = ALast - 3;
   
-  while ((ch = getopt(argc, argv, "ht:x:y:m:l:vN:T:f:rA:4?")) != EOF)
+  while ((ch = getopt(argc, argv, "ht:x:y:m:l:vN:T:f:rA:4p:?")) != EOF)
     switch(ch) {
       char *ptr;
       /* case 'g':BetaName = "Gamma";BetaFak  = -1.0;break; */
@@ -545,6 +628,10 @@ void GetArgs(NumParams *p, GraphParams *g, int argc, char *argv[]) {
       break;
     case 'f':
       g->Font = optarg;
+      break;
+    case 'p':
+      p->VarsFile = optarg;
+      ReadVars(p);
       break;
     case 'r':
       g->FgColor   = BLACK;
@@ -1723,7 +1810,7 @@ void ProcessQueue(NumParams *p, GraphParams *g) {
 	  todo = ReCa;
 	  break;
 	}
-      for (i = 0; i < ALast; i++)
+      for (i = 1; i < ALast; i++)
 	if (Mmx >= g->cpos[i].x0 && Mmx <= g->cpos[i].x1 &&
 	    Mmy >= g->cpos[i].y0 && Mmy <= g->cpos[i].y1) {
 	  if (g->AltKey) {
@@ -1916,6 +2003,8 @@ void ProcessQueue(NumParams *p, GraphParams *g) {
       todo = ReWr;
       break;
     case 's': gl2ppm("| ppmtogif > fsscale.gif"); break;
+    case 'Q': ReadVars(p); todo = ReCa; break;
+    case 'W': WriteVars(p);             break;
     case 'p': g->RemoveFiles = 1; rewrite = write_all(1, rewrite); break;
     case 'P': g->RemoveFiles = 0; rewrite = write_all(1, rewrite); break;
     case 'q':
@@ -2317,12 +2406,13 @@ int main(int argc, char *argv[]) {
   
   memset(&P, 0, sizeof(NumParams));
   P.Progname = argv[0];
-  P.d  = 0.1;
-  P.L0 = 1.0;
-  P.Z  = 1.0;
-  P.U  = 1.0;
-  P.Xf = 1.0;
-  P.Yf = 1.0;
+  
+  {
+    int a;
+    double *Vars = &P.Vardummy;
+    for (a = 1; a < ALast; a++) Vars[a] = Defaults[a].val;
+  }
+  
   P.Ny = 1.0 / P.X;
   P.FullFit = 1;
   P.VarFactor = 1.0;
