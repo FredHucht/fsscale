@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995, 1996
  *
- * $Id: fsscale.c,v 2.6 1996/10/23 13:33:38 michael Exp michael $
+ * $Id: fsscale.c,v 2.7 1996-10-23 15:39:55+02 michael Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.7  1996-10-23 15:39:55+02  michael
+ * Added help line for key 'p'
+ *
  * Revision 2.6  1996/10/23 13:33:38  michael
  * Added gnuplot output and isatty(fileno(stdin)) warning
  *
@@ -129,7 +132,7 @@ int    Swh, FontH, FontD;
 char   *Title = "FSScale";
 char   *Progname;
 char   *Font  = "-*-Times-Medium-R-Normal--*-120-*-*-*-*-*-*";
-char   *RCSId = "$Id: fsscale.c,v 2.6 1996/10/23 13:33:38 michael Exp michael $";
+char   *RCSId = "$Id: fsscale.c,v 2.7 1996-10-23 15:39:55+02 michael Exp fred $";
 
 void gnuplot(int);    
 void byebye(int sig);
@@ -159,7 +162,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.6 $ (C) Fred Hucht 1995, 1996\n"
+	    "$Revision: 2.7 $ (C) Fred Hucht 1995, 1996\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
@@ -1156,7 +1159,7 @@ void gnuplot(int flag) {
   if (!replot && !flag) return;    /* replot == 1 when plot has changed
 				      and needs to be replotted.
 				      flag forces a replot (see above) */
-  
+  color(WHITE); rectfi(0,0,2,2); sleep(0);
   plotting = 1;
   replot = 0;
   if ((gpfile = fopen(GNUPLOTFILE, "w")) == NULL) {
@@ -1197,6 +1200,7 @@ void gnuplot(int flag) {
 	    (i < S - 1) ? ',' : '\n');
   }
   fclose(gpfile);
+  color(BLACK); rectfi(0,0,2,2); sleep(0);
   return;
 }
   
