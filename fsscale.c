@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995-2000
  *
- * $Id: fsscale.c,v 2.43 2000-11-03 09:58:41+01 fred Exp fred $
+ * $Id: fsscale.c,v 2.44 2000-11-03 10:14:29+01 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.44  2000-11-03 10:14:29+01  fred
+ * *** empty log message ***
+ *
  * Revision 2.43  2000-11-03 09:58:41+01  fred
  * ShowNuBeta also in xmgr/gnuplot output
  *
@@ -137,7 +140,7 @@
  */
 /*#pragma OPTIONS inline+Pow*/
 
-char   *RCSId = "$Id: fsscale.c,v 2.43 2000-11-03 09:58:41+01 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.44 2000-11-03 10:14:29+01 fred Exp fred $";
 
 /* Note: AIX: Ignore warnings "No function prototype given for 'finite'" See math.h, line 429 */
 
@@ -319,7 +322,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.43 $ (C) Fred Hucht 1995-1998\n"
+	    "$Revision: 2.44 $ (C) Fred Hucht 1995-1998\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
@@ -714,8 +717,8 @@ double Valuate(NumParams *p) {
   p->AV = 1 - p->AV;
   for (i = 0; i < p->S; i++) if (p->Set[i].active) if (!p->Set[i].sorted) {
     fprintf(stderr,
-	    "Dataset %d (L = %g) not sorted, can't include into variance.\n",
-	    i, p->Set[i].L);
+	    "Dataset %d (%s = %g) not sorted, can't include into variance.\n",
+	    i, Gp->Names[0], p->Set[i].L);
   } else {
     Set_t *s  = &p->Set[i];
     double m = 0.0;
