@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995-2001
  *
- * $Id: fsscale.c,v 2.50 2001-02-21 10:01:31+01 fred Exp fred $
+ * $Id: fsscale.c,v 2.51 2001-02-21 10:02:14+01 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.51  2001-02-21 10:02:14+01  fred
+ * *** empty log message ***
+ *
  * Revision 2.50  2001-02-21 10:01:31+01  fred
  * Added description of key 'V'
  *
@@ -158,7 +161,7 @@
  */
 /*#pragma OPTIONS inline+Pow*/
 
-char   *RCSId = "$Id: fsscale.c,v 2.50 2001-02-21 10:01:31+01 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.51 2001-02-21 10:02:14+01 fred Exp fred $";
 
 /* Note: AIX: Ignore warnings "No function prototype given for 'finite'" See math.h, line 429 */
 
@@ -340,7 +343,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.50 $ (C) Fred Hucht 1995-1998\n"
+	    "$Revision: 2.51 $ (C) Fred Hucht 1995-1998\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
@@ -409,7 +412,8 @@ void Usage(int verbose) {
 	    "  left|right mouse:   Zoom in|out and disable autoscaling\n"
 	    "  middle mouse:       Enable autoscaling (default)\n"
 	    "  Keys 'a'|'A':       Enable|disable autoscaling\n"
-	    "  Key 'r':            Reset all values to commandline values\n"
+	    "  Key 'R':            Reset all values to commandline values\n"
+	    "  Key 'r':            Reverse all colors\n"
 	    "  Key 'l':            Toggle drawing of lines\n"
 	    "  Key 'g':            Toggle drawing of grid\n"
 	    "  Key 'p':            Write gnuplot-loadable file 'fsscale-PID-T,M.gp'\n"
@@ -607,7 +611,7 @@ void ReadData(NumParams *p) {
 	  s         = &p->Set[p->S];
 	  s->L      = L;
 	  s->D      = D;
-	  s->color  = Gp->Colors[p->S % (sizeof(Gp->Colors)/sizeof(Gp->Colors[0]))];
+	  s->color  = p->S % (sizeof(Gp->Colors)/sizeof(Gp->Colors[0]));
 	  s->active = 1;
 	  s->N      = 0;
 	  s->Data   = (Data_t*) malloc(sizeof(Data_t));
@@ -1128,7 +1132,7 @@ void DrawMain(const NumParams *p, GraphParams *g) {
   
   for (i = 0; i < p->S; i++) {
     Set_t *s = &p->Set[i];
-    color(s->color);
+    color(g->Colors[s->color]);
     if (p->NumRows == 3)
       sprintf(text, s->active ? " %.4g" : " (%.4g)", s->L);
     else
@@ -1157,7 +1161,8 @@ void checked_v2d(const NumParams *p, double x0, double x1, double dm[2][2]) {
     bgnenddraw(0);
   } else {
     /* All OK */
-    if (bgnenddraw(1)) v2d(x); /* Draw at least one point */
+    if (bgnenddraw(1)) /* v2d(x); */
+      pnt2(x[0], x[1]); /* Draw at least one point */
     v2d(x);
   }
 }
@@ -1287,9 +1292,9 @@ void DrawPlot(NumParams *p) {
   }
   
   for (i = 0; i < p->S; i++) if (p->Set[i].active) {
-    Set_t *s  = &p->Set[i];
+    Set_t *s = &p->Set[i];
     
-    color(s->color);
+    color(Gp->Colors[s->color]);
     
     for (j = 0; j < s->N; j++) {
       Data_t *d = &s->Data[j];
@@ -1492,6 +1497,21 @@ int Fit(NumParams *p) {
     }
   }
   return todo;
+}
+
+void ReverseVideo(GraphParams *g) {
+  static int flag = 0;
+  int tmp;
+  int Col0[] = {WHITE, BLACK};
+  int Col2[] = {YELLOW, BLUE};
+  int Gray[] = {180, 80};
+  
+  flag = 1 - flag;
+  tmp = g->FgColor; g->FgColor = g->BgColor; g->BgColor = tmp;
+  g->Colors[0] = Col0[flag];
+  g->Colors[2] = Col2[flag];
+  g->GrayVal   = Gray[flag];
+  mapcolor(GRAY, g->GrayVal, g->GrayVal, g->GrayVal);
 }
 
 void ProcessQueue(NumParams *p, GraphParams *g) {
@@ -1727,7 +1747,7 @@ void ProcessQueue(NumParams *p, GraphParams *g) {
     } else switch(val) {
     case 'a': g->AutoScale = 1; todo = ReWr; break;
     case 'A': g->AutoScale = 0; break;
-    case 'r':
+    case 'R':
       p->X  = p->X_o;
       p->Y  = p->Y_o;
       p->M  = p->M_o;
@@ -1761,6 +1781,7 @@ void ProcessQueue(NumParams *p, GraphParams *g) {
     case 'B': p->Beta-=p->d; INTCHECK(p->Beta);todo= ReCaBN; break;
     case '#': g->ShowNuBeta ^= 1;            todo = ReMa; break;
       
+    case 'r': ReverseVideo(g);               todo = ReWr; break;
     case 'l': g->Lines = (g->Lines + 1) % 3; todo = ReWr; break;
     case 'g': g->Grid ^= 1;                  todo = ReWr; break;
     case 'v': g->ShowVar ^= 1;               todo = ReVa; break;
