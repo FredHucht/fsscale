@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995, 1996
  *
- * $Id: fsscale.c,v 2.16 1996/11/11 16:50:55 fred Exp michael $
+ * $Id: fsscale.c,v 2.17 1996/11/14 15:24:42 michael Exp michael $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.17  1996/11/14 15:24:42  michael
+ * fixed a bug in gnuplot() (int first etc...)
+ *
  * Revision 2.16  1996/11/11 16:50:55  fred
  * Failed to read lines with more columns than expected.
  *
@@ -168,7 +171,7 @@ int    Swh, FontH, FontD;
 char   *Title = "FSScale";
 char   *Progname;
 char   *Font  = "-*-Times-Medium-R-Normal--*-120-*-*-*-*-*-*";
-char   *RCSId = "$Id: fsscale.c,v 2.16 1996/11/11 16:50:55 fred Exp michael $";
+char   *RCSId = "$Id: fsscale.c,v 2.17 1996/11/14 15:24:42 michael Exp michael $";
 
 #define NUMACTIVE (sizeof(Variables)/sizeof(Variables[0]))
 double dummy = 0.0, *Variables[] = {
@@ -219,7 +222,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.16 $ (C) Fred Hucht 1995, 1996\n"
+	    "$Revision: 2.17 $ (C) Fred Hucht 1995, 1996\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
@@ -1454,7 +1457,7 @@ void gnuplot(int flag) {
   first = 1;
   for(i = 0; i < S; i++) if(Set[i].active) {
     Set_t *s  = &Set[i];
-    fprintf(gpfile, "%c'%s' title '%s=%g' %c",
+    fprintf(gpfile, "%c'%s' title '%s=%g'",
 	    first ? ' ' : ',',
 	    s->datfilename,
 	    Names[0], s->L);
