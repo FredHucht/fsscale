@@ -2,9 +2,13 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995, 1996
  *
- * $Id: fsscale.c,v 2.14 1996-11-07 14:07:13+01 fred Exp fred $
+ * $Id: fsscale.c,v 2.15 1996-11-11 17:47:15+01 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.15  1996-11-11 17:47:15+01  fred
+ * Added log corrections, ExpX, ExpY now may lineary depend on
+ * (undocumented) 4th column (use option -4), useful for gap exponents...
+ *
  * Revision 2.14  1996-11-07 14:07:13+01  fred
  * lmlc etal. und Active...
  *
@@ -161,7 +165,7 @@ int    Swh, FontH, FontD;
 char   *Title = "FSScale";
 char   *Progname;
 char   *Font  = "-*-Times-Medium-R-Normal--*-120-*-*-*-*-*-*";
-char   *RCSId = "$Id: fsscale.c,v 2.14 1996-11-07 14:07:13+01 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.15 1996-11-11 17:47:15+01 fred Exp fred $";
 
 #define NUMACTIVE (sizeof(Variables)/sizeof(Variables[0]))
 double dummy = 0.0, *Variables[] = {
@@ -212,7 +216,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.14 $ (C) Fred Hucht 1995, 1996\n"
+	    "$Revision: 2.15 $ (C) Fred Hucht 1995, 1996\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
@@ -423,7 +427,7 @@ void ReadData(void) {
     if(buf[0] != '#') {
       double L, T, M, B = 0.0;
       int n = sscanf(buf, "%lf %lf %lf %lf", &L, &T, &M, &B);
-      if(n == NumRows) { /* Valid */
+      if(n >= NumRows) { /* Valid */
 #if 0
 	fprintf(stdout, "%lf %lf %lf %lf\n", L, T, M ,B);
 #endif
