@@ -2,9 +2,13 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995-2002
  *
- * $Id: fsscale.c,v 2.58 2002-07-09 14:01:55+02 fred Exp fred $
+ * $Id: fsscale.c,v 2.59 2002-08-15 11:49:07+02 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.59  2002-08-15 11:49:07+02  fred
+ * Added display of scaling function (loadable with L=0) and metric
+ * factors
+ *
  * Revision 2.58  2002-07-09 14:01:55+02  fred
  * Added L0 for log corrections, fixed finite() prototype under AIX
  *
@@ -185,7 +189,7 @@
  */
 /*#pragma OPTIONS inline+Pow*/
 
-char   *RCSId = "$Id: fsscale.c,v 2.58 2002-07-09 14:01:55+02 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.59 2002-08-15 11:49:07+02 fred Exp fred $";
 
 /* Note: AIX: Ignore warnings "No function prototype given for 'finite'"
  * From math.h:
@@ -306,7 +310,9 @@ typedef struct GraphParams_ {
   char  *Font;
   char  *Names[4];
   const double LevelLen[2];
+  int   ShiftKey, AltKey, LeftMouse;
   int   Actives[ALast];
+  
   
   int   Active;
   int   NumActive;
@@ -320,7 +326,6 @@ typedef struct GraphParams_ {
   int   Labi[2];
   Int32 MainW, PlotW;
   int   Swh, FontH, FontD;
-  int   ShiftKey, AltKey, LeftMouse;
   int   ShowVar;
   struct CPos cpos[ALast];
   int   ShowZero;
@@ -373,7 +378,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.58 $ (C) Fred Hucht 1995-2002\n"
+	    "$Revision: 2.59 $ (C) Fred Hucht 1995-2002\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension L\n"
@@ -442,6 +447,7 @@ void Usage(int verbose) {
 	    "\n"
 	    "  left|right mouse:   Zoom in|out and disable autoscaling\n"
 	    "  middle mouse:       Enable autoscaling (default)\n"
+	    "  mouse wheel:        Change activated variable by d\n"
 	    "  Keys 'a'|'A':       Enable|disable autoscaling\n"
 	    "  Key 'R':            Reset all values to commandline values\n"
 	    "  Key 'r':            Reverse all colors\n"
@@ -584,6 +590,7 @@ void GraphInit(GraphParams *g) {
     LEFTALTKEY,   RIGHTALTKEY,
     LEFTMOUSE,    MIDDLEMOUSE,    RIGHTMOUSE,
     MOUSEX,       MOUSEY,
+    WHEELUP,      WHEELDOWN,
     PAD1, PAD2, PAD3, PAD4, PAD5, PAD6, PAD7, PAD8, PAD9
   };
   
@@ -996,6 +1003,7 @@ int charstrC(const char *ctext) {
 }
 
 int charstrH(const char *text, int h) {
+  /* superscript/subscript with height h */
   Screencoord cx, cy, r;
   /*getcpos(&cx, &cy); cx -= Gp->XPos; cy -= Gp->YPos;*/
   cx = CX; cy = CY;
@@ -1006,6 +1014,7 @@ int charstrH(const char *text, int h) {
 }
 
 int charstrP(const char *text, int h, struct CPos* cpos) {
+  /* charstrH with position saved in cpos */
   Screencoord cx, cy, r;
   /*getcpos(&cx, &cy); cx -= Gp->XPos; cy -= Gp->YPos;*/
   cx = CX; cy = CY;
@@ -1142,7 +1151,7 @@ void DrawMain(const NumParams *p, GraphParams *g) {
   
   if (g->ShowZero || CI(AL0) || p->L0 != 1.0) {
     sprintf(text, "; %s /= #%c%g#0", g->Names[0], CI(AL0) + '0', p->L0);
-    charstrC(text);
+    charstrP(text, 0, &g->cpos[AL0]);
   }
   
   /*sprintf(text, "; X = #%c%s#0", CI(AXf) + '0',
@@ -1150,10 +1159,10 @@ void DrawMain(const NumParams *p, GraphParams *g) {
   
   if (g->ShowZero || CI(AXf) || p->Xf != 1.0) {
     sprintf(text, "; X/#%c%g#0 =", CI(AXf) + '0', p->Xf);
-    charstrC(text);
+    charstrP(text, 0, &g->cpos[AXf]);
     g->Labi[0] = sprintf(g->Lab[0], "%g [", p->Xf);
   } else {
-    charstrC("; X = ");
+    charstrP("; X = ", 0, &g->cpos[AXf]);
     g->Labi[0] = sprintf(g->Lab[0], "");
   }
   
@@ -1171,7 +1180,7 @@ void DrawMain(const NumParams *p, GraphParams *g) {
   if (g->ShowZero || CI(ALsf) || p->Lsf) {
     /* + Lsf */
     sprintf(text, " #%c%+g#0", CI(ALsf) + '0', p->Lsf);
-    charstrC(text);
+    charstrP(text, 0, &g->cpos[ALsf]);
     /* (L - Lc)^Xs */
     WriteTerm(p, g, NULL, ALc, 0, AXs,  AOff,  0);
     /* log(L - Lc)^Lxs */
@@ -1187,10 +1196,10 @@ void DrawMain(const NumParams *p, GraphParams *g) {
   
   if (g->ShowZero || CI(AYf) || p->Yf != 1.0) {
     sprintf(text, "; Y/#%c%g#0 =", CI(AYf) + '0', p->Yf);
-    charstrC(text);
+    charstrP(text, 0, &g->cpos[AYf]);
     g->Labi[1] = sprintf(g->Lab[1], "%g", p->Yf);
   } else {
-    charstrC("; Y = ");
+    charstrP("; Y = ", 0, &g->cpos[AYf]);
     g->Labi[1] = sprintf(g->Lab[1], "");
   }
   
@@ -1646,6 +1655,12 @@ void ProcessQueue(NumParams *p, GraphParams *g) {
     my = val;
   show:
     ShowPos(p, g, mx, my, showpos);
+    break;
+  case WHEELUP:
+    if (val) todo = ChangeActive(p, g,  p->d);
+    break;
+  case WHEELDOWN:
+    if (val) todo = ChangeActive(p, g, -p->d);
     break;
   case LEFTSHIFTKEY:
   case RIGHTSHIFTKEY:
@@ -2286,6 +2301,7 @@ int main(int argc, char *argv[]) {
     "-*-Times-Medium-R-Normal--*-120-*-*-*-*-*-*",
     {"L", "T", "M", "D"},
     {0.02, 0.01},
+    0, 0, 0,
     {AOff, Ad, AL0,
      AXf, ATc, AZ, ALz, ALc, AX,       ALx, ALLx, ALsf, AXs, ALxs,
      AYf, AMc, AU,       AY,     ALy, ALLy,   AM, ALm}
