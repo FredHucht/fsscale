@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995, 1996
  *
- * $Id: fsscale.c,v 2.29 1998-02-09 15:58:48+01 fred Exp fred $
+ * $Id: fsscale.c,v 2.30 1998-02-11 16:47:39+01 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.30  1998-02-11 16:47:39+01  fred
+ * Added ExpLm, ExpLz, fixed log(L) -> log(L-Lc)
+ *
  * Revision 2.29  1998-02-09 15:58:48+01  fred
  * Y = ... * L^y -> Y = ... * (L - Lc)^Y
  *
@@ -221,7 +224,7 @@ int    Swh, FontH, FontD;
 char   *Title = "FSScale";
 char   *Progname;
 char   *Font  = "-*-Times-Medium-R-Normal--*-120-*-*-*-*-*-*";
-char   *RCSId = "$Id: fsscale.c,v 2.29 1998-02-09 15:58:48+01 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.30 1998-02-11 16:47:39+01 fred Exp fred $";
 char   GPName[256]   = "";
 char   XmgrName[256] = "";
 
@@ -283,7 +286,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.29 $ (C) Fred Hucht 1995-1998\n"
+	    "$Revision: 2.30 $ (C) Fred Hucht 1995-1998\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
@@ -575,28 +578,30 @@ void Calculate(void) {
       d->lx[0] = (x > 0.0) ? log10(x) : 0.0;
       d->lx[1] = (y > 0.0) ? log10(y) : 0.0;
       
-      if (         x < Xmin)   Xmin   = x;
-      if (x > 0 && x < XminXp) XminXp = x;
-      if (y > 0 && x < XminYp) XminYp = x;
-      if (         y < Ymin)   Ymin   = y;
-      if (x > 0 && y < YminXp) YminXp = y;
-      if (y > 0 && y < YminYp) YminYp = y;
-      if (         x > Xmax)   Xmax   = x;
-      if (y > 0 && x > XmaxYp) XmaxYp = x;
-      if (         y > Ymax)   Ymax   = y;
-      if (x > 0 && y > YmaxXp) YmaxXp = y;
+      if (finite(x) && finite(y)) {
+	if (         x < Xmin)   Xmin   = x;
+	if (x > 0 && x < XminXp) XminXp = x;
+	if (y > 0 && x < XminYp) XminYp = x;
+	if (         y < Ymin)   Ymin   = y;
+	if (x > 0 && y < YminXp) YminXp = y;
+	if (y > 0 && y < YminYp) YminYp = y;
+	if (         x > Xmax)   Xmax   = x;
+	if (y > 0 && x > XmaxYp) XmaxYp = x;
+	if (         y > Ymax)   Ymax   = y;
+	if (x > 0 && y > YmaxXp) YmaxXp = y;
 #if 0
-      fprintf(stderr,
-	      "x=%f y=%f Xmin=%f XminXp=%f XminYp=%f "
-	      "Ymin=%f YminXp=%f YminYp=%f "
-	      "Xmax=%f XmaxYp=%f "
-	      "Ymax=%f YmaxXp=%f\n",
-	      x, y,
-	      Xmin, XminXp, XminYp,
-	      Ymin, YminXp, YminYp,
-	      Xmax, XmaxYp,
-	      Ymax, YmaxXp);
+	fprintf(stderr,
+		"x=%f y=%f Xmin=%f XminXp=%f XminYp=%f "
+		"Ymin=%f YminXp=%f YminYp=%f "
+		"Xmax=%f XmaxYp=%f "
+		"Ymax=%f YmaxXp=%f\n",
+		x, y,
+		Xmin, XminXp, XminYp,
+		Ymin, YminXp, YminYp,
+		Xmax, XmaxYp,
+		Ymax, YmaxXp);
 #endif
+      }
     }
   }
   
@@ -632,7 +637,7 @@ void Calculate(void) {
 	double x = Xmin + k * (Xmax - Xmin) / ASZ;
 	Var[AV][k][0] = x;
 	if (x <  s->Data[0     ].x[0] ||
-	   x >= s->Data[s->N-1].x[0]) {
+	    x >= s->Data[s->N-1].x[0]) {
 	  s->A[k] = NODATA;
 	} else {
 	  if (x >= s->Data[j].x[0] && j + 1 < s->N) {
@@ -650,7 +655,7 @@ void Calculate(void) {
 	double x = XminXp * pow(Xmax / XminXp, (double)k / ASZ);
 	LVar[AV][k][0] = x;
 	if (x <  s->Data[0     ].x[0] ||
-	   x >= s->Data[s->N-1].x[0]) {
+	    x >= s->Data[s->N-1].x[0]) {
 	  s->lA[k] = NODATA;
 	} else {
 	  if (x >= s->Data[j].x[0] && j + 1 < s->N) {
