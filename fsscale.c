@@ -2,9 +2,13 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995, 1996
  *
- * $Id: fsscale.c,v 2.8 1996/10/23 14:13:56 fred Exp michael $
+ * $Id: fsscale.c,v 2.9 1996-10-23 17:14:04+02 michael Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.9  1996-10-23 17:14:04+02  michael
+ * fixed bug: weisser Punkt is now Punkt in FgColor.
+ * setting of replot is more intelligent.
+ *
  * Revision 2.8  1996/10/23 14:13:56  fred
  * Added weisser Punkt.
  *
@@ -135,7 +139,7 @@ int    Swh, FontH, FontD;
 char   *Title = "FSScale";
 char   *Progname;
 char   *Font  = "-*-Times-Medium-R-Normal--*-120-*-*-*-*-*-*";
-char   *RCSId = "$Id: fsscale.c,v 2.8 1996/10/23 14:13:56 fred Exp michael $";
+char   *RCSId = "$Id: fsscale.c,v 2.9 1996-10-23 17:14:04+02 michael Exp fred $";
 
 void gnuplot(int);    
 void byebye(int sig);
@@ -165,7 +169,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.8 $ (C) Fred Hucht 1995, 1996\n"
+	    "$Revision: 2.9 $ (C) Fred Hucht 1995, 1996\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
@@ -215,7 +219,7 @@ void Usage(int verbose) {
 	    "  Key 'r':            Reset all values\n"
 	    "  Key 'l':            Toggle drawing of lines\n"
 	    "  Key 'g':            Toggle drawing of grid\n"
-	    "  Key 'p':            Write a 'fsscale.gp' gnuplot-loadable file\n"
+	    "  Key 'p':            Write gnuplot-loadable file 'fsscale.gp'\n"
 	    "  Key 's':            Save actual graph to file 'fsscale.gif'\n"
 #ifdef BEWERT
 	    "  Key 'v':            Toggle drawing of variance function\n"
@@ -1110,7 +1114,6 @@ void ProcessQueue(void) {
     case '>': Delta *= 10.; rd = 1; break;
     case 'x': AutoScale = 1; LogX ^= 1; replot = rd = 1; break;
     case 'y': AutoScale = 1; LogY ^= 1; replot = rd = 1; break;
-    case 'i': logicop(LO_NSRC); break;
     case 's': gl2ppm("| ppmtogif > fsscale.gif"); break;
     case 'p': gnuplot(1); break;
 #if 0
