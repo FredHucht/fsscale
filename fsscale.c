@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995, 1996
  *
- * $Id: fsscale.c,v 2.13 1996-11-06 19:35:20+01 fred Exp fred $
+ * $Id: fsscale.c,v 2.14 1996-11-07 14:07:13+01 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.14  1996-11-07 14:07:13+01  fred
+ * lmlc etal. und Active...
+ *
  * Revision 2.13  1996-11-06 19:35:20+01  fred
  * Added new input method using Keypad keys.
  *
@@ -54,8 +57,6 @@
 #include <unistd.h>
 
 #define GNUPLOTFILE "fsscale.gp"
-
-#define EXPT
 #define BEWERT
 
 #ifndef MAX
@@ -65,7 +66,6 @@
 # define MIN(a, b) ((a) < (b) ? (a) : (b))
 #endif
 
-/* #define INTCHECK(var) if(fabs(var) < 1e-10) var = 0.0 */
 #define INTCHECK(var) do { double ivar = floor(var + 0.5); if(fabs(var - ivar) < 1e-10) var = ivar; } while(0)
 
 #define GRAY 8
@@ -82,6 +82,7 @@ typedef struct Data_t_ {
 
 typedef struct Set_t_ {
   double L;		/* Scaling parameter, normally linear system size */
+  double B;		/* Additional scaling parameter column 4 */
   int    color;		/**/
   int    active;
   int	 N;		/* Number of data points */
@@ -126,6 +127,12 @@ double ExpY_o = 0.0, ExpY  = 0.0;
 double ExpM_o = 0.0, ExpM  = 0.0;
 double ExpZ   = 1.0;
 double ExpU   = 1.0;
+double ExpLx  = 0.0;
+double ExpLy  = 0.0;
+double ExpBx  = 0.0;
+double ExpBy  = 0.0;
+double XFak   = 1.0;
+double YFak   = 1.0;
 int    Lines  = 1;
 int    Grid   = 0;
 Int32  XSize  = 400;
@@ -136,11 +143,12 @@ Int32  PXSize;
 Int32  PYSize;
 Int32  PXPos;
 Int32  PYPos;
+int    NumRows = 3;
 /*
   char   *BetaName = "Beta";
   double BetaFak   = 1.0;
   */
-char   *Names[] = {"L", "T", "M"};
+char   *Names[] = {"L", "T", "M", "C4"};
 char   Xlab[256], Ylab[256];
 int    AutoScale = 1;
 int    replot = 1;
@@ -153,20 +161,27 @@ int    Swh, FontH, FontD;
 char   *Title = "FSScale";
 char   *Progname;
 char   *Font  = "-*-Times-Medium-R-Normal--*-120-*-*-*-*-*-*";
-char   *RCSId = "$Id: fsscale.c,v 2.13 1996-11-06 19:35:20+01 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.14 1996-11-07 14:07:13+01 fred Exp fred $";
 
 #define NUMACTIVE (sizeof(Variables)/sizeof(Variables[0]))
 double dummy = 0.0, *Variables[] = {
   &dummy,
+  &XFak,
   &Tc, &ExpZ,
-  &Lc, &ExpX,
+  &Lc,
+  &ExpX, &ExpBx, &ExpLx,
+  &YFak,
   &Mc, &ExpU,
-  &ExpY,
+  &ExpY, &ExpBy, &ExpLy,
   /*Tc*/ &ExpM
 };
-enum   ActiveNames {AOff, ATc, AZ, ALc, AX, AMc, AU, AY, AM};
-int    Active = AOff, Activei = 0, NumActive = NUMACTIVE;
-int    Actives[] = {0,1,2,3,4,5,6,7,8};
+enum   ActiveNames {
+  AOff, AXF, ATc, AZ, ALc, AX, ABx, ALx, AYF, AMc, AU, AY, ABy, ALy, AM
+};
+int Actives[NUMACTIVE] = {
+  0,    1,   2,   3,  4,   5,       7,   8,   9,   10, 11,      13,  14
+};
+int Active = AOff, Activei = 0, NumActive = NUMACTIVE - 2;
 
 void gnuplot(int);    
 void byebye(int sig);
@@ -197,7 +212,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.13 $ (C) Fred Hucht 1995, 1996\n"
+	    "$Revision: 2.14 $ (C) Fred Hucht 1995, 1996\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
@@ -218,8 +233,9 @@ void Usage(int verbose) {
 	    "  -y y                Preset Exponent y (default: 1)\n"
 	    "  -m m                Preset Exponent m (default: 1)\n"
 	    "  -A i1,i2,...        Define which variables can be activated using\n"
-	    "                      pad4/pad6 (see below). Use 0,3,6 for Tc,x,y\n"
-	    "                      0:Tc 1:z 2:Lc 3:x 4:Mc 5:u 6:y 7:m\n"
+	    "                      pad4/pad6 (see below). Use 1,4,10 for Tc,x,y\n"
+	    "                      0:Xsign 1:Tc 2:z 3:Lc 4:x\n"
+	    "                      7:Ysign 8:Mc 9:u 10:y 13:m\n"
 	    /*"  -n Ny              Preset Ny\n"
 	      "  -b Beta            Preset Beta/Gamma\n"*/
 	    /*"  -g                 Change from Ny/Beta to Ny/Gamma\n"*/
@@ -272,10 +288,11 @@ void Usage(int verbose) {
 
 void GetArgs(int argc, char *argv[]) {
   int ch;
+  int optA = 0;
   extern int optind;
   extern char *optarg;
   
-  while((ch = getopt(argc, argv, "ht:x:y:m:l:vN:T:f:rA:?")) != EOF)
+  while((ch = getopt(argc, argv, "ht:x:y:m:l:vN:T:f:rA:4?")) != EOF)
     switch(ch) {
       /*
 	case 'g':
@@ -297,6 +314,7 @@ void GetArgs(int argc, char *argv[]) {
       Names[0] = strtok(optarg, ",");
       Names[1] = strtok(NULL,   ",");
       Names[2] = strtok(NULL,   ",");
+      Names[3] = strtok(NULL,   ",");
       break;
     case 'A':
       {
@@ -305,7 +323,16 @@ void GetArgs(int argc, char *argv[]) {
 	Actives[a++] = atoi(strtok(optarg, ","));
 	while(s = strtok(NULL, ",")) Actives[a++] = atoi(s);
 	NumActive = a;
+	optA = 1;
       }
+      break;
+    case '4':
+      if(!optA) {
+	int a;
+	for(a = 1; a < NUMACTIVE; a++) Actives[a] = a;
+	NumActive = NUMACTIVE;
+      }
+      NumRows = 4;
       break;
     case 'T':
       Title = optarg;
@@ -394,11 +421,11 @@ void ReadData(void) {
     fgets(buf, sizeof(buf), stdin);
     lineno++;
     if(buf[0] != '#') {
-      double L, T, M;
-      int n = sscanf(buf, "%lf %lf %lf", &L, &T, &M);
-      if(n == 3) { /* Valid */
+      double L, T, M, B = 0.0;
+      int n = sscanf(buf, "%lf %lf %lf %lf", &L, &T, &M, &B);
+      if(n == NumRows) { /* Valid */
 #if 0
-	fprintf(stdout, "%lf %lf %lf\n", L, T, M);
+	fprintf(stdout, "%lf %lf %lf %lf\n", L, T, M ,B);
 #endif
 	if(L != oldL) { /* New set */
 	  oldL      = L;
@@ -406,6 +433,7 @@ void ReadData(void) {
 	  Set       = (Set_t*) realloc(Set, (S+1) * sizeof(Set_t));
 	  s         = &Set[S];
 	  s->L      = L;
+	  if(NumRows == 4) s->B = B;
 	  s->color  = Colors[S % (sizeof(Colors)/sizeof(Colors[0]))];
 	  s->active = 1;
 	  s->N      = 0;
@@ -444,9 +472,9 @@ void Calculate(void) {
   Ymax = YmaxXp = -1e100;
   
   for(i = 0; i < S; i++) if(Set[i].active) {
-    Set_t *s  = &Set[i];
-    double Lx = pow(s->L - Lc, ExpX);
-    double Ly = pow(s->L,      ExpY);
+    Set_t *s   = &Set[i];
+    double Lx  = XFak * pow(s->L - Lc, ExpX + ExpBx * s->B) * pow(log(s->L), ExpLx);
+    double Ly  = YFak * pow(s->L,      ExpY + ExpBy * s->B) * pow(log(s->L), ExpLy);
     
     for(j = 0; j < s->N; j++) {
       Data_t *d = &s->Data[j];
@@ -694,14 +722,36 @@ void CalcTicks(struct Ticks_* t, int Log, double d) {
 
 }
 
-void charstrH(char * text, int h) {
+int charstrC(char *ctext) {
+  /* charstr with buildin color sequences
+   * returns strwidth of written string */
+  char *text = strdup(ctext);
+  char *s = text;
+  int i, n, Cols[2], cx = 0;
+  Cols[0] = FgColor;
+  Cols[1] = ACOLOR;
+  n = strlen(text);
+  
+  for(i = 0; i < n; i++) if(text[i] == '#') {
+    text[i] = '\0';
+    charstr(s); /* Write it */
+    cx += strwidth(s);
+    color(Cols[text[++i] - '0']); /* Set next color */
+    s = text + i + 1;
+  }
+  charstr(s); /* Write rest */
+  cx += strwidth(s);
+  free(text);
+  return cx;
+}
+
+void charstrH(char *text, int h) {
   Screencoord cx, cy;
   getcpos(&cx, &cy);
   cx -= XPos; cy -= YPos;
-  cmov2i (cx, cy + h);
-  charstr(text);
-  cx += strwidth(text);
-  cmov2i (cx, cy);
+  cmov2i(cx, cy + h);
+  cx += charstrC(text);
+  cmov2i(cx, cy);
 }    
 
 void Draw(void) {
@@ -714,86 +764,141 @@ void Draw(void) {
   winset(MainW);
   color(BgColor);
   clear();
+  color(FgColor);
+  cmov2(FRAME, 2 * FontH + FontD);
   
   Xlab[0] = Ylab[0] = 0;
   ncx = sprintf(Xlab, "$");
   ncy = sprintf(Ylab, "$");
   
-  sprintf(lmlc, Lc || Active == ALc ? "(%s%+g)" : "%s", Names[0], -Lc);
-  sprintf(tmtc, Tc || Active == ATc ? "(%s%+g)" : "%s", Names[1], -Tc);
-  sprintf(mmmc, Mc || Active == AMc ? "(%s%+g)" : "%s", Names[2], -Mc);
+  sprintf(lmlc, Lc || Active == ALc ? "(%s#%c%+g#0)" : "%s",
+	  Names[0], (Active == ALc) + '0', -Lc);
+  sprintf(tmtc, Tc || Active == ATc ? "(%s#%c%+g#0)" : "%s",
+	  Names[1], (Active == ATc) + '0', -Tc);
+  sprintf(mmmc, Mc || Active == AMc ? "(%s#%c%+g#0)" : "%s",
+	  Names[2], (Active == AMc) + '0', -Mc);
   
-  cmov2(FRAME, 2 * FontH + FontD);
-  color(FgColor);
-  sprintf(text, "d = %g; X = ", Delta);
-  charstr (text);
-  
+  sprintf(text, "d = %g; X = #%c%s#0%s", Delta, (Active == AXF) + '0',
+	  XFak < 0.0 ? "-" : Active == AXF ? "+" : "", tmtc);
   /* (T - Tc) */
-  color(Active == ATc ? ACOLOR : FgColor);
-  charstr(tmtc);
-  ncx += sprintf(Xlab + ncx, "%s", tmtc);
+  charstrC(text);
+  ncx += sprintf(Xlab + ncx, "%s%s", XFak == 1.0 ? "" : "-", tmtc);
   
   /* ^z */
   if(ExpZ != 1.0 || Active == AZ) {
-    color(Active == AZ ? ACOLOR : FgColor);
-    sprintf(text, "%g",  ExpZ); charstrH(text, FontH/2);
+    sprintf(text, "#%c%g#0", (Active == AZ) + '0', ExpZ);
+    charstrH(text, FontH/2);
     ncx += sprintf(Xlab + ncx, "^{%g}", ExpZ);
   }
   
   /* * (L - Lc) */
-  if(ExpX || Lc || Active == ALc || Active == AX) {
-    color(FgColor); charstr(" * ");
-    color(Active == ALc ? ACOLOR : FgColor);
-    charstr(lmlc);
+  if(ExpBx || ExpX || Lc || Active == ALc || Active == AX || Active == ABx) {
+    charstrC(" * ");
+    charstrC(lmlc);
     ncx += sprintf(Xlab + ncx, " \\cdot %s", lmlc);
     
-    /* ^x */
-    if(ExpX != 1.0 || Active == AX) {
-      color(Active == AX ? ACOLOR : FgColor);
-      sprintf(text, "%g",  ExpX); charstrH(text, FontH/2);
-      ncx += sprintf(Xlab + ncx, "^{%g}", ExpX);
+    /* ^(x + By B) */
+    switch(2 * (ExpX || Active == AX) + (ExpBx || Active == ABx)) {
+    case 3: /* Both */
+      sprintf(text, "(#%c%g#%c%+g#0*%s)",
+	      (Active == AX ) + '0', ExpX,
+	      (Active == ABx) + '0', ExpBx,
+	      Names[3]);
+      charstrH(text, FontH/2);
+      ncx += sprintf(Xlab + ncx, "^{%g%+g %s}", ExpX, ExpBx, Names[3]);
+      break;
+    case 2: /* X */
+      if(ExpX != 1.0 || Active == AX) {
+	sprintf(text, "#%c%g#0", (Active == AX) + '0', ExpX);
+	charstrH(text, FontH/2);
+	ncx += sprintf(Xlab + ncx, "^{%g}", ExpX);
+      }
+      break;
+    case 1: /* Bx */
+      sprintf(text, "#%c%g#0*%s", (Active == ABx) + '0', ExpBx, Names[3]);
+      charstrH(text, FontH/2);
+      ncx += sprintf(Xlab + ncx, "^{%g %s}", ExpBx, Names[3]);
+      break;
     }
   }
   
-  color(FgColor); charstr("; Y = ");
+  /* * ExpLx * log(L) */
+  if(ExpLx || Active == ALx) {
+    charstrC(" * log(L)");
+    ncx += sprintf(Xlab + ncx, "\\cdot \\log(L)");
+    if(ExpLx != 1.0 || Active == ALx) {
+      sprintf(text, "#%c%g#0", (Active == ALx) + '0', ExpLx);
+      charstrH(text, FontH/2);
+      ncx += sprintf(Xlab + ncx, "^{%g}", ExpLx);
+    }
+  }
   
+  sprintf(text, "; Y = #%c%s#0%s", (Active == AYF) + '0',
+	  YFak < 0.0 ? "-" : Active == AYF ? "+" : "", mmmc);
   /* (M - Mc) */
-  color(Active == AMc ? ACOLOR : FgColor);
-  charstr(mmmc);
-  ncy += sprintf(Ylab + ncy, "%s", mmmc);
+  charstrC(text);
+  
+  ncy += sprintf(Ylab + ncy, "%s%s", YFak == 1.0 ? "" : "-", mmmc);
   
   /* ^u */
   if(ExpU != 1.0 || Active == AU) {
-    color(Active == AU ? ACOLOR : FgColor);
-    sprintf(text, "%g",  ExpU); charstrH(text, FontH/2);
+    sprintf(text, "#%c%g#0", (Active == AU) + '0', ExpU);
+    charstrH(text, FontH/2);
     ncy += sprintf(Ylab + ncy, "^{%g}", ExpU);
   }
   
   /* * L */
-  if(ExpY || Active == AY) {
-    color(FgColor); charstr(" * ");
-    charstr(Names[0]);
+  if(ExpBy || ExpY || Active == AY || Active == ABy) {
+    charstrC(" * ");
+    charstrC(Names[0]);
     ncy += sprintf(Ylab + ncy, " \\cdot %s", Names[0]);
     
-    /* ^y */
-    if(ExpY != 1.0 || Active == AY) {
-      color(Active == AY ? ACOLOR : FgColor);
-      sprintf(text, "%g",  ExpY); charstrH(text, FontH/2);
-      ncy += sprintf(Ylab + ncy, "^{%g}", ExpY);
+    /* ^(y + By B) */
+    switch(2 * (ExpY || Active == AY) + (ExpBy || Active == ABy)) {
+    case 3: /* Both */
+      sprintf(text, "(#%c%g#%c%+g#0*%s)",
+	      (Active == AY ) + '0', ExpY,
+	      (Active == ABy) + '0', ExpBy,
+	      Names[3]);
+      charstrH(text, FontH/2);
+      ncy += sprintf(Ylab + ncy, "^{%g%+g %s}", ExpY, ExpBy, Names[3]);
+      break;
+    case 2: /* Y */
+      if(ExpY != 1.0 || Active == AY) {
+	sprintf(text, "#%c%g#0", (Active == AY) + '0', ExpY);
+	charstrH(text, FontH/2);
+	ncy += sprintf(Ylab + ncy, "^{%g}", ExpY);
+      }
+      break;
+    case 1: /* By */
+      sprintf(text, "#%c%g#0*%s", (Active == ABy) + '0', ExpBy, Names[3]);
+      charstrH(text, FontH/2);
+      ncy += sprintf(Ylab + ncy, "^{%g %s}", ExpBy, Names[3]);
+      break;
+    }
+  }
+  
+  /* * ExpLy * log(L) */
+  if(ExpLy || Active == ALy) {
+    charstrC(" * log(L)");
+    ncy += sprintf(Ylab + ncy, "\\cdot \\log(L)");
+    if(ExpLy != 1.0 || Active == ALy) {
+      sprintf(text, "#%c%g#0", (Active == ALy) + '0', ExpLy);
+      charstrH(text, FontH/2);
+      ncy += sprintf(Ylab + ncy, "^{%g}", ExpLy);
     }
   }
   
   /* * (T - Tc) */
   if(ExpM || Active == AM) {
-    color(FgColor); charstr(" * ");
-    color(Active == ATc ? ACOLOR : FgColor);
-    charstr(tmtc);
+    charstrC(" * ");
+    charstrC(tmtc);
     ncy += sprintf(Ylab + ncy, " \\cdot %s", tmtc);
     
     /* ^m */
     if(ExpM != 1.0 || Active == AM) {
-      color(Active == AM ? ACOLOR : FgColor);
-      sprintf(text, "%g",  ExpM); charstrH(text, FontH/2);
+      sprintf(text, "#%c%g#0", (Active == AM) + '0', ExpM);
+      charstrH(text, FontH/2);
       ncy += sprintf(Ylab + ncy, "^{%g}", ExpM);
     }
   }
@@ -802,8 +907,7 @@ void Draw(void) {
   strcat(Ylab, "$");
   
   cmov2(FRAME, FontH + FontD);
-  color(FgColor);
-  sprintf(text, "%s = ", Names[0]); charstr(text);
+  sprintf(text, "%s = ", Names[0]); charstrC(text);
   
   winset(PlotW);
   
@@ -1082,6 +1186,7 @@ void ProcessQueue(void) {
   int rd = 0; /* Redraw ? */
   int rc = 0; /* Recalc ? */
   static Int16 mx = 0, my = 0, showpos = 1;
+  double fak = 0.0;
   
   /*qreset();*/
   
@@ -1186,12 +1291,21 @@ void ProcessQueue(void) {
     
   case PAD4: if(val) {Activei = (Activei + NumActive - 1) % NumActive; Active = Actives[Activei]; rd = 1;} break;
   case PAD6: if(val) {Activei = (Activei             + 1) % NumActive; Active = Actives[Activei]; rd = 1;} break;
-  case PAD1: if(val) {*Variables[Active] -= 10*Delta; INTCHECK(*Variables[Active]); XY = 1;} break;
-  case PAD2: if(val) {*Variables[Active] -=    Delta; INTCHECK(*Variables[Active]); XY = 1;} break;
-  case PAD3: if(val) {*Variables[Active] -= .1*Delta; INTCHECK(*Variables[Active]); XY = 1;} break;
-  case PAD7: if(val) {*Variables[Active] += 10*Delta; INTCHECK(*Variables[Active]); XY = 1;} break;
-  case PAD8: if(val) {*Variables[Active] +=    Delta; INTCHECK(*Variables[Active]); XY = 1;} break;
-  case PAD9: if(val) {*Variables[Active] += .1*Delta; INTCHECK(*Variables[Active]); XY = 1;} break;
+  case PAD1: if(fak == 0) fak =  -10 * Delta;
+  case PAD2: if(fak == 0) fak =       -Delta;
+  case PAD3: if(fak == 0) fak = -0.1 * Delta;
+  case PAD7: if(fak == 0) fak =   10 * Delta;
+  case PAD8: if(fak == 0) fak =        Delta;
+  case PAD9: if(fak == 0) fak =  0.1 * Delta;
+    if(val) {
+      if(Active == AXF || Active == AYF)
+	*Variables[Active] = fak > 0 ? 1.0 : -1.0;
+      else
+	*Variables[Active] += fak;
+      INTCHECK(*Variables[Active]);
+      XY = 1;
+    }
+    break;
   case KEYBD:
     if(val >= '0' && val <= '9') {
       Int16 val2;
@@ -1210,6 +1324,9 @@ void ProcessQueue(void) {
       Tc   = Tc_o;
       Lc = Mc = 0;
       ExpZ = ExpU = XY = 1;
+      ExpLx = ExpLy = 0;
+      ExpBx = ExpBy = 0;
+      XFak = YFak = 1.0;
       break;
     case 'c': Lc   += Delta; INTCHECK(Lc  ); rc = 1; break;
     case 'C': Lc   -= Delta; INTCHECK(Lc  ); rc = 1; break;
@@ -1221,6 +1338,10 @@ void ProcessQueue(void) {
     case 'Z': ExpZ -= Delta; INTCHECK(ExpZ); rc = 1; break;
     case 'u': ExpU += Delta; INTCHECK(ExpU); rc = 1; break;
     case 'U': ExpU -= Delta; INTCHECK(ExpU); rc = 1; break;
+    case 'i': ExpLx += Delta; INTCHECK(ExpLx); rc = 1; break;
+    case 'I': ExpLx -= Delta; INTCHECK(ExpLx); rc = 1; break;
+    case 'j': ExpLy += Delta; INTCHECK(ExpLy); rc = 1; break;
+    case 'J': ExpLy -= Delta; INTCHECK(ExpLy); rc = 1; break;
 #if 0
     case 'x': ExpX += Delta; INTCHECK(ExpX); XY = 1; break;
     case 'X': ExpX -= Delta; INTCHECK(ExpX); XY = 1; break;
@@ -1229,8 +1350,14 @@ void ProcessQueue(void) {
 #endif
     case 'n': Ny   += Delta; INTCHECK(Ny  ); XY = 2; break;
     case 'N': Ny   -= Delta; INTCHECK(Ny  ); XY = 2; break;
+#if 0
     case 'b': Beta += Delta; INTCHECK(Beta); XY = 2; break;
     case 'B': Beta -= Delta; INTCHECK(Beta); XY = 2; break;
+#endif
+    case 'd': ExpBx += Delta; INTCHECK(ExpBx); rc = 1; break;
+    case 'D': ExpBx -= Delta; INTCHECK(ExpBx); rc = 1; break;
+    case 'b': ExpBy += Delta; INTCHECK(ExpBy); rc = 1; break;
+    case 'B': ExpBy -= Delta; INTCHECK(ExpBy); rc = 1; break;
     case 'l': Lines = (Lines + 1) % 3; replot = rd = 1; break;
     case 'g': Grid    ^= 1; replot = rd = 1; break;
     case 'v': ShowVar ^= 1; rc = 1; break;
@@ -1293,9 +1420,9 @@ void gnuplot(int flag) {
   }
   for(i = 0; i < S; i++) if(Set[i].active) {
     Set_t *s  = &Set[i];
-    if (s->datfilename[0] == 0)
-     mktemp(strcpy(s->datfilename, "/tmp/fscXXXXXX"));
-    if ((s->datfile = fopen(s->datfilename, "w")) == NULL) {
+    if(s->datfilename[0] == 0)
+      mktemp(strcpy(s->datfilename, "/tmp/fscXXXXXX"));
+    if((s->datfile = fopen(s->datfilename, "w")) == NULL) {
       perror(s->datfilename);
     } else for(j = 0; j < s->N; j++) {
       Data_t *d = &s->Data[j];
