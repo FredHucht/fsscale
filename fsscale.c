@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995-2001
  *
- * $Id: fsscale.c,v 2.49 2001-02-19 16:10:17+01 fred Exp fred $
+ * $Id: fsscale.c,v 2.50 2001-02-21 10:01:31+01 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.50  2001-02-21 10:01:31+01  fred
+ * Added description of key 'V'
+ *
  * Revision 2.49  2001-02-19 16:10:17+01  fred
  * Added oldD
  *
@@ -155,7 +158,7 @@
  */
 /*#pragma OPTIONS inline+Pow*/
 
-char   *RCSId = "$Id: fsscale.c,v 2.49 2001-02-19 16:10:17+01 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.50 2001-02-21 10:01:31+01 fred Exp fred $";
 
 /* Note: AIX: Ignore warnings "No function prototype given for 'finite'" See math.h, line 429 */
 
@@ -337,7 +340,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.49 $ (C) Fred Hucht 1995-1998\n"
+	    "$Revision: 2.50 $ (C) Fred Hucht 1995-1998\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
@@ -419,13 +422,13 @@ void Usage(int verbose) {
 	    "                      gray curve: previous variance\n"
 	    "  Key 'V':            Change evaluation function of variance\n"
 	    "                      V0: arithmetic mean of relative variance:\n"
-	    "                              1/L \sum_L     (<m(L)^2> - <m(L)>^2)/<m(L)>^2\n"
+	    "                              1/L \\sum_L     (<m(L)^2> - <m(L)>^2)/<m(L)>^2\n"
 	    "                      V1: geometric mean of relative variance:\n"
-	    "                          exp(1/L \sum_L log((<m(L)^2> - <m(L)>^2)/<m(L)>^2)\n"
+	    "                          exp(1/L \\sum_L log((<m(L)^2> - <m(L)>^2)/<m(L)>^2)\n"
 	    "                      V2: arithmetic mean of absolute variance\n"
-	    "                              1/L \sum_L     (<m(L)^2> - <m(L)>^2)\n"
+	    "                              1/L \\sum_L     (<m(L)^2> - <m(L)>^2)\n"
 	    "                      V3: geometic mean of absolute variance:\n"
-	    "                          exp(1/L \sum_L log (<m(L)^2> - <m(L)>^2))\n"
+	    "                          exp(1/L \\sum_L log (<m(L)^2> - <m(L)>^2))\n"
 	    "  Key 'f'|'F':        Change prefactor Vf of variance\n"
 	    "  Key 'x':            Toggle X-axis linear/log scale\n"
 	    "  Key 'y':            Toggle Y-axis linear/log scale\n"
