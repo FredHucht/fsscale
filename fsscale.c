@@ -1,9 +1,13 @@
-/*
+/* -*- mode: c;  c-basic-offset: 2 -*-
+ * 
  * Finite Size scaling (C) Fred Hucht 1995, 1996
  *
- * $Id: fsscale.c,v 2.4 1996/09/11 20:40:18 fred Exp fred $
+ * $Id: fsscale.c,v 2.5 1996/09/12 10:30:33 fred Exp michael $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.5  1996/09/12 10:30:33  fred
+ * Changed ZCHECK to INTCHECK, fixed bug Xmax, Ymax always >= 0
+ *
  * Revision 2.4  1996/09/11 20:40:18  fred
  * Added ExpU
  *
@@ -22,6 +26,9 @@
 #include <math.h>
 #include <string.h>
 #include <signal.h>
+#include <unistd.h>
+
+#define GNUPLOTFILE "fsscale.gp"
 
 #define EXPT
 #define BEWERT
@@ -59,6 +66,8 @@ typedef struct Set_t_ {
   double tmp;
   int    sorted;
 #endif
+  char datfilename[16];
+  FILE *datfile;
 } Set_t;
 
 #ifdef BEWERT
@@ -105,7 +114,9 @@ Int32  PYPos;
   double BetaFak   = 1.0;
   */
 char   *Names[] = {"L", "T", "M"};
+char   Xlab[256], Ylab[256];
 int    AutoScale = 1;
+int    replot = 1;
 #ifdef BEWERT
 int    ShowVar = 0;
 #endif
@@ -115,8 +126,20 @@ int    Swh, FontH, FontD;
 char   *Title = "FSScale";
 char   *Progname;
 char   *Font  = "-*-Times-Medium-R-Normal--*-120-*-*-*-*-*-*";
-char   *RCSId = "$Id: fsscale.c,v 2.4 1996/09/11 20:40:18 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.5 1996/09/12 10:30:33 fred Exp michael $";
 
+void gnuplot(int);    
+void byebye(int sig);
+
+void byebye(int sig) {
+  int i;
+  for (i = 0; i < S; i++) {
+    Set_t *s  = &Set[i];
+    if (s->datfilename[0] != 0) remove(s->datfilename);
+  }
+  exit(sig);
+}
+  
 double exp10(double x) {
   return pow(10.0, x);
 }
@@ -133,7 +156,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.4 $ (C) Fred Hucht 1995, 1996\n"
+	    "$Revision: 2.5 $ (C) Fred Hucht 1995, 1996\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
@@ -265,7 +288,7 @@ void GetArgs(int argc, char *argv[]) {
 void GraphInit(void) {
   int i;
   Device Devs[] =  {
-    KEYBD,
+    KEYBD,        INPUTCHANGE,
     UPARROWKEY,   DOWNARROWKEY,
     LEFTARROWKEY, RIGHTARROWKEY,
     PAGEUPKEY,    PAGEDOWNKEY,
@@ -327,6 +350,7 @@ void ReadData(void) {
 	  s->N      = 0;
 	  s->Data   = (Data_t*) malloc(sizeof(Data_t));
 	  s->sorted = 1;
+	  s->datfilename[0] = 0;
 	} else if(s->sorted && s->Data[s->N-1].T > T) {
 	  s->sorted = 0;
 	}
@@ -601,7 +625,7 @@ void charstrH(char * text, int h) {
 }    
 
 void Draw(void) {
-  int i, j;
+  int i, j, ncx, ncy;
   char lmlc[80], tmtc[80], mmmc[80], text[256];
   double x, y;
   struct Ticks_ tx, ty;
@@ -615,6 +639,10 @@ void Draw(void) {
   cmov2(FRAME, 2 * FontH + FontD);
   /*sprintf(text, "d = %g, Tc = %g, Ny = %g, %s = %g, X = %g, Y = %g",
     Delta, Tc, Ny, BetaName, BetaFak * Beta, ExpX, ExpY);*/
+
+  Xlab[0] = Ylab[0] = 0;
+  ncx = sprintf(Xlab, "$");
+  ncy = sprintf(Ylab, "$");
   
   if(Lc) sprintf(lmlc, "(%s%+g)", Names[0], -Lc);
   else   sprintf(lmlc, "%s",      Names[0]);
@@ -624,33 +652,46 @@ void Draw(void) {
   
   if(Mc) sprintf(mmmc, "(%s%+g)", Names[2], -Mc);
   else   sprintf(mmmc, "%s",      Names[2]);
-  
+
   sprintf(text, "d = %g; X = %s", Delta, tmtc); charstr (text);
+  ncx += sprintf(Xlab + ncx, "%s", tmtc);
+  
   if(ExpZ != 1.0) {
     sprintf(text, "%g",  ExpZ);       charstrH(text, FontH/2);
+    ncx += sprintf(Xlab + ncx, "^{%g}", ExpZ);
   }
   if(ExpX || Lc) {
     sprintf(text, " * %s", lmlc);     charstr (text);
+    ncx += sprintf(Xlab + ncx, " \\cdot %s", lmlc);
     if(ExpX != 1.0) {
       sprintf(text, "%g",  ExpX);     charstrH(text, FontH/2);
+      ncx += sprintf(Xlab + ncx, "^{%g}", ExpX);
     }
   }
   sprintf(text, "; Y = %s", mmmc);    charstr(text);
+  ncy += sprintf(Ylab + ncy, "%s", mmmc);
   if(ExpU != 1.0) {
     sprintf(text, "%g",  ExpU);       charstrH(text, FontH/2);
+    ncy += sprintf(Ylab + ncy, "^{%g}", ExpU);
   }
   if(ExpM) {
     sprintf(text, " * %s", tmtc);     charstr(text);
+    ncy += sprintf(Ylab + ncy, " \\cdot %s", tmtc);
     if(ExpM != 1.0) {
       sprintf(text, "%g",  ExpM);     charstrH(text, FontH/2);
+      ncy += sprintf(Ylab + ncy, "^{%g}", ExpM);
     }
   }
   if(ExpY) {
     sprintf(text, " * %s", Names[0]); charstr (text);
+    ncy += sprintf(Ylab + ncy, " \\cdot %s", Names[0]);
     if(ExpY != 1.0) {
       sprintf(text, "%g",  ExpY);     charstrH(text, FontH/2);
+      ncy += sprintf(Ylab + ncy, "^{%g}", ExpY);
     }
   }
+  strcat(Xlab, "$");
+  strcat(Ylab, "$");
   
   cmov2(FRAME, FontH + FontD);
   sprintf(text, "%s = ", Names[0]); charstr(text);
@@ -943,6 +984,7 @@ void ProcessQueue(void) {
   
   switch(dev) {
   case INPUTCHANGE:
+    if (val == 0) gnuplot(0);
     showpos = val == PlotW;
     goto show;
   case MOUSEX:
@@ -1060,12 +1102,15 @@ void ProcessQueue(void) {
     case 'y': AutoScale = 1; LogY ^= 1; rd = 1; break;
     case 'i': logicop(LO_NSRC); break;
     case 's': gl2ppm("| ppmtogif > fsscale.gif"); break;
+    case 'p': gnuplot(1); break;
 #if 0
     case '3': AutoScale = 1; LogX = 1; LogY = 0; rd = 1; break;
     case '4': AutoScale = 1; LogX = 1; LogY = 1; rd = 1; break;
 #endif
     case 'q':
-    case '\033': exit(0); break;
+    case '\033':
+      byebye(0);
+      break;
     }
     break;
   }
@@ -1090,12 +1135,75 @@ void ProcessQueue(void) {
   if(rd) {
     Draw();
     ShowPos(mx, my, showpos);
+    replot = 1;
   }
 }
 
+void gnuplot(int flag) {
+  FILE *gpfile;
+  int i, j;
+  static plotting = 0;
+  char *styles[] = { "points", "lines", "linespoints" };
+
+  if (!(flag || plotting)) return; /* flag == 1 when 'p' was pressed
+				      plotting == 1 when we are in
+				      "plotting-mode", i. e. 'p' has been
+				      pressed at least once */
+  if (!replot && !flag) return;    /* replot == 1 when plot has changed
+				      and needs to be replotted.
+				      flag forces a replot (see above) */
+  
+  plotting = 1;
+  replot = 0;
+  if ((gpfile = fopen(GNUPLOTFILE, "w")) == NULL) {
+    perror(GNUPLOTFILE);
+    return;
+  }
+  for(i = 0; i < S; i++) if(Set[i].active) {
+    Set_t *s  = &Set[i];
+    if (s->datfilename[0] == 0)
+     mktemp(strcpy(s->datfilename, "/tmp/fscXXXXXX"));
+    if ((s->datfile = fopen(s->datfilename, "w")) == NULL) {
+      perror(s->datfilename);
+    } else for(j = 0; j < s->N; j++) {
+      Data_t *d = &s->Data[j];
+      fprintf(s->datfile, "%g %g\n", d->x[0], d->x[1]);
+    }
+    fclose(s->datfile);
+  }
+  fprintf(gpfile, "set %slog x\n", LogX ? "":"no");
+  fprintf(gpfile, "set %slog y\n", LogY ? "":"no");
+  fprintf(gpfile, "set %sgrid\n",  Grid ? "":"no");
+  
+  fprintf(gpfile, "set data style %s\n", styles[Lines]);
+  fprintf(gpfile, "set title '%s'\n", Title);
+  fprintf(gpfile, "set xlabel '%s'\n", Xlab);
+  fprintf(gpfile, "set ylabel '%s'\n", Ylab);
+  fprintf(gpfile, "plot [%g:%g][%g:%g] ",
+	  LogX ? exp10(OXmin) : OXmin,
+	  LogX ? exp10(OXmax) : OXmax,
+	  LogY ? exp10(OYmin) : OYmin,
+	  LogY ? exp10(OYmax) : OYmax);
+
+  for(i = 0; i < S; i++) if(Set[i].active) {
+    Set_t *s  = &Set[i];
+    fprintf(gpfile, "'%s' title '%s=%g' %c",
+	    s->datfilename,
+	    Names[0], s->L,
+	    (i < S - 1) ? ',' : '\n');
+  }
+  fclose(gpfile);
+  return;
+}
+  
 int main(int argc, char *argv[]) {
   signal(SIGFPE, SIG_IGN); /* 4 Linux */
+  signal(SIGHUP,  byebye);
+  signal(SIGTERM, byebye);
+  signal(SIGINT,  byebye);
   Progname = argv[0];
+  if(isatty(fileno(stdin)))
+   fprintf(stderr, "%s: reading input from terminal.\n", Progname);
   Ny = 1.0 / ExpX;
   GetArgs(argc, argv);
   ReadData();
@@ -1103,3 +1211,4 @@ int main(int argc, char *argv[]) {
   Calculate();
   while(1) ProcessQueue();
 }
+
