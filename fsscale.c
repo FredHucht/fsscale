@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995-2002
  *
- * $Id: fsscale.c,v 2.66 2003/02/25 10:00:54 fred Exp fred $
+ * $Id: fsscale.c,v 2.67 2003-03-14 23:00:42+01 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.67  2003-03-14 23:00:42+01  fred
+ * Added AZs, AUs
+ *
  * Revision 2.66  2003/02/25 10:00:54  fred
  * Fixed bug in -N processing (occured under Linux)
  *
@@ -211,7 +214,7 @@
  */
 /*#pragma OPTIONS inline+Pow*/
 
-char   *RCSId = "$Id: fsscale.c,v 2.66 2003/02/25 10:00:54 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.67 2003-03-14 23:00:42+01 fred Exp fred $";
 
 /* Note: AIX: Ignore warnings "No function prototype given for 'finite'"
  * From math.h:
@@ -230,6 +233,7 @@ char   *RCSId = "$Id: fsscale.c,v 2.66 2003/02/25 10:00:54 fred Exp fred $";
 #include <signal.h>
 #include <unistd.h>
 #include <time.h>
+#include <errno.h>
 
 #ifndef MAX
 # define MAX(a, b) ((a) > (b) ? (a) : (b))
@@ -306,6 +310,7 @@ typedef struct NumParams_ {
   double Beta;
   char  *VarsFile;
   char   Command[1024];
+  char   Inactives[1024];
   double VarFactor;
   int    L0_only_in_log;
   double Vardummy,
@@ -435,7 +440,6 @@ void WriteParams(const NumParams *p, const GraphParams *g) {
   char bakfile[256];
   
   if (p->VarsFile) {
-    extern int errno;
     snprintf(bakfile, sizeof(bakfile), "%s%s", p->VarsFile, "~");
     if (0 != rename(p->VarsFile, bakfile) && errno != 2) {
 #if 0
@@ -490,6 +494,18 @@ void WriteParams(const NumParams *p, const GraphParams *g) {
     n++;
   }
   
+  {
+    int inactive = 0;
+    for (a = 0; a < p->S; a++) if (!p->Set[a].active) inactive = 1;
+    if (inactive) {
+      fprintf(tn, "inactive =");
+      for (a = 0; a < p->S; a++) if (!p->Set[a].active)
+	fprintf(tn, " %d", a);
+      fprintf(tn, "\n");
+      n++;
+    }
+  }
+
   for (a = 1; a < sizeof(Defaults) / sizeof(Defaults[0]); a++) {
     struct Defaults_ *def = &Defaults[a];
     if (def->val != Vars[a]) {
@@ -510,31 +526,33 @@ void ReadParams(NumParams *p, GraphParams *g) {
   tn = fopen(p->VarsFile, "r");
   if (tn) {
     char line[1024];
+    p->Inactives[0] = '\0';
     while (fgets(line, sizeof(line), tn)) {
       char name[128];
       char val[1024];
       sscanf(line, "%s = %[^\n]", name, val);
       
       if (strcmp(name, "title") == 0) {
-	strcpy(g->Title, val);
+	strncpy(g->Title, val, sizeof(g->Title));
 	if (g->MainW) {
 	  winset(g->MainW);
 	  wintitle(g->Title);
 	}
       } else if (strcmp(name, "cmd") == 0) {
-	strcpy(p->Command, val);
+	strncpy(p->Command, val, sizeof(p->Command));
       } else if (strncmp(name, "name", 4) == 0
 		 && name[4] >= '0'
 		 && name[4] <= '3') {
-	strcpy(g->Names[name[4] - '0'], val);
+	strncpy(g->Names[name[4] - '0'], val, sizeof(g->Names[0]));
       } else if (strcmp(name, "logx") == 0) {
 	p->LogX = atoi(val);
       } else if (strcmp(name, "logy") == 0) {
 	p->LogY = atoi(val);
       } else if (strcmp(name, "l0onlyinlog") == 0) {
 	p->L0_only_in_log = atoi(val);
+      } else if (strcmp(name, "inactive") == 0) {
+	strncpy(p->Inactives, val, sizeof(p->Inactives));
       }
-      
       for (a = 1; a < sizeof(Defaults) / sizeof(Defaults[0]); a++) {
 	if (strcmp(name, Defaults[a].name) == 0) {
 	  Vars[a] = atof(val);
@@ -561,7 +579,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.66 $ (C) Fred Hucht 1995-2002\n"
+	    "$Revision: 2.67 $ (C) Fred Hucht 1995-2002\n"
 	    "\n"
 	    "%s reads three column data from standard input or from command specified with '-c'.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension L\n"
@@ -901,6 +919,15 @@ void ReadData(NumParams *p) {
   
   if (p->Command[0] != '\0') {
     pclose(tn);
+  }
+
+  if (p->Inactives[0] != '\0') {
+    char inactives[1024], *str;
+    strncpy(inactives, p->Inactives, sizeof(inactives));
+    for (str = strtok(inactives, " "); str; str = strtok(NULL, " ")) {
+      int a = atoi(str);
+      if (a >= 0 && a < p->S) p->Set[a].active = 0;
+    }
   }
 }
 
@@ -2586,7 +2613,7 @@ int main(int argc, char *argv[]) {
     1,
     400, 400,
     "FSScale",
-    "-*-Times-Medium-R-Normal--16-*-*-*-*-*-*-*",
+    "-*-Times-Medium-R-Normal--17-*-*-*-*-*-*-*",
     {"L", "T", "M", "D"},
     {0.02, 0.01},
     0, 0, 0,
