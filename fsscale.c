@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995, 1996
  *
- * $Id: fsscale.c,v 2.25 1998/02/02 13:35:46 fred Exp fred $
+ * $Id: fsscale.c,v 2.26 1998/02/03 12:31:02 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.26  1998/02/03 12:31:02  fred
+ * xmgr output now has world coordinates (no autoscale)
+ *
  * Revision 2.25  1998/02/02 13:35:46  fred
  * data now in gnuplot file, rewrote {gnuplot|xmgr}_label(), added
  * variance of previous parameters (blue line)
@@ -176,6 +179,7 @@ double ExpLx  = 0.0;
 double ExpLy  = 0.0;
 double ExpBx  = 0.0;
 double ExpBy  = 0.0;
+double ExpBu  = 0.0;
 double XFak   = 1.0;
 double YFak   = 1.0;
 int    Lines  = 1;
@@ -193,7 +197,7 @@ int    NumRows = 3;
   char   *BetaName = "Beta";
   double BetaFak   = 1.0;
   */
-char   *Names[] = {"L", "T", "M", "C4"};
+char   *Names[] = {"L", "T", "M", "D"};
 char   Xlab[256], Ylab[256];
 int    AutoScale = 1;
 int    Rewrite = 1;
@@ -208,7 +212,7 @@ int    Swh, FontH, FontD;
 char   *Title = "FSScale";
 char   *Progname;
 char   *Font  = "-*-Times-Medium-R-Normal--*-120-*-*-*-*-*-*";
-char   *RCSId = "$Id: fsscale.c,v 2.25 1998/02/02 13:35:46 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.26 1998/02/03 12:31:02 fred Exp fred $";
 char   GPName[256]   = "";
 char   XmgrName[256] = "";
 
@@ -220,17 +224,17 @@ double dummy = 0.0, *Variables[] = {
   &Lc,
   &ExpX, &ExpBx, &ExpLx,
   &YFak,
-  &Mc, &ExpU,
+  &Mc, &ExpU, &ExpBu,
   &ExpY, &ExpBy, &ExpLy,
   /*Tc*/ &ExpM
 };
 enum   ActiveNames {
-  AOff, AXF, ATc, AZ, ALc, AX, ABx, ALx, AYF, AMc, AU, AY, ABy, ALy, AM
+  AOff, AXF, ATc, AZ, ALc, AX, ABx, ALx, AYF, AMc, AU, ABu, AY, ABy, ALy, AM
 };
 int Actives[NUMACTIVE] = {
-  0,    1,   2,   3,  4,   5,       7,   8,   9,   10, 11,      13,  14
+  0,    1,   2,   3,  4,   5,       7,   8,   9,   10,      12,      14,  15
 };
-int Active = AOff, Activei = 0, NumActive = NUMACTIVE - 2;
+int Active = AOff, Activei = 0, NumActive = NUMACTIVE - 3;
 
 void write_both(int);
 void write_gnuplot(void);
@@ -261,7 +265,7 @@ void Usage(int verbose) {
   fprintf(stderr, 
 	  "Usage: %s [-h] [-t <Tc>] [-x <x>] [-y <y>] [-m <m>] [-lx] [-ly]\n"
 	  "               [-N <name1,name2,name3>] [-T <title>] [-f <font>] [-r]\n"
-	  "               [-A <i1,...,in> ]\n"
+	  "               [-A <i1,...,in> ] [-4]\n"
 	  , Progname);
   if (!verbose)
     fprintf(stderr,
@@ -270,7 +274,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.25 $ (C) Fred Hucht 1995-1998\n"
+	    "$Revision: 2.26 $ (C) Fred Hucht 1995-1998\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
@@ -295,6 +299,9 @@ void Usage(int verbose) {
 	    "                      pad4/pad6 (see below). Use 2,5,11 for Tc,x,y\n"
 	    "                      1:Xsign 2:Tc  3:z  4:Lc 5:x\n"
 	    "                      8:Ysign 9:Mc 10:u 11:y 14:m (default: all)\n"
+	    "  -4                  Input has 4 columns, 4th is called D by default.\n"
+	    "                      D appears in several exponents of the scaling function\n"
+	    "                      using the keypad keys.\n"
 	    /*"  -n Ny              Preset Ny\n"
 	      "  -b Beta            Preset Beta/Gamma\n"*/
 	    /*"  -g                 Change from Ny/Beta to Ny/Gamma\n"*/
@@ -439,6 +446,13 @@ void GetArgs(int argc, char *argv[]) {
     }
   argc -= optind;
   
+  if (Names[0] == NULL || Names[1] == NULL ||
+      Names[2] == NULL || (NumRows == 4 && Names[3] == NULL)) {
+    fprintf(stderr, "option -N requires %d comma seperated names.\n",
+	    NumRows);
+    exit(1);
+  }
+  
   /*Beta *= BetaFak;
     ExpX  = 1.0  / Ny;
     ExpY  = Beta * ExpX;*/
@@ -553,7 +567,7 @@ void Calculate(void) {
     for (j = 0; j < s->N; j++) {
       Data_t *d = &s->Data[j];
       double x  = d->x[0] = pow(d->T - Tc, ExpZ) * Lx;
-      double y  = d->x[1] = pow(d->M - Mc, ExpU) * Ly * pow(d->T - Tc, ExpM);
+      double y  = d->x[1] = pow(d->M - Mc, ExpU + ExpBu * s->B) * Ly * pow(d->T - Tc, ExpM);
       
       d->lx[0] = (x > 0.0) ? log10(x) : 0.0;
       d->lx[1] = (y > 0.0) ? log10(y) : 0.0;
@@ -912,13 +926,36 @@ void Draw(void) {
   
   ncy += sprintf(Ylab + ncy, "%s%s", YFak == 1.0 ? "" : "-", mmmc);
   
-  /* ^u */
+  /* ^(u + Bu B) */
+  switch(2 * (ExpU || Active == AU) + (ExpBu || Active == ABu)) {
+  case 3: /* Both */
+    sprintf(text, "(#%c%g#%c%+g#0*%s)",
+	    (Active == AU ) + '0', ExpU,
+	    (Active == ABu) + '0', ExpBu,
+	    Names[3]);
+    charstrH(text, FontH/2);
+    ncy += sprintf(Ylab + ncy, "\\S%g%+g %s\\N", ExpU, ExpBu, Names[3]);
+    break;
+  case 2: /* U */
+    if (ExpU != 1.0 || Active == AU) {
+      sprintf(text, "#%c%g#0", (Active == AU) + '0', ExpU);
+      charstrH(text, FontH/2);
+      ncy += sprintf(Ylab + ncy, "\\S%g\\N", ExpU);
+    }
+    break;
+  case 1: /* Bu */
+    sprintf(text, "#%c%g#0*%s", (Active == ABu) + '0', ExpBu, Names[3]);
+    charstrH(text, FontH/2);
+    ncy += sprintf(Ylab + ncy, "\\S%g %s\\N", ExpBu, Names[3]);
+    break;
+  }
+#if 0
   if (ExpU != 1.0 || Active == AU) {
     sprintf(text, "#%c%g#0", (Active == AU) + '0', ExpU);
     charstrH(text, FontH/2);
     ncy += sprintf(Ylab + ncy, "\\S%g\\N", ExpU);
   }
-  
+#endif
   /* * L */
   if (ExpBy || ExpY || Active == AY || Active == ABy) {
     charstrC(" * ");
@@ -1407,7 +1444,7 @@ void ProcessQueue(void) {
       Lc = Mc = 0;
       ExpZ = ExpU = XY = 1;
       ExpLx = ExpLy = 0;
-      ExpBx = ExpBy = 0;
+      ExpBx = ExpBy = ExpBu = 0;
       XFak = YFak = 1.0;
       break;
     case 'c': Lc   += Delta; INTCHECK(Lc  ); rc = 1; break;
