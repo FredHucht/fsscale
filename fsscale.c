@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995-1998
  *
- * $Id: fsscale.c,v 2.38 1998-03-02 13:19:55+01 fred Exp fred $
+ * $Id: fsscale.c,v 2.39 1998-06-04 15:29:06+02 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.39  1998-06-04 15:29:06+02  fred
+ * Mouse control in formula/datasets, own pow(), loglog(), ...
+ *
  * Revision 2.38  1998-03-02 13:19:55+01  fred
  * Added mouse support for formula etc.
  * Added SetMinMax(), WriteTerm(), ChangeActive()
@@ -122,7 +125,7 @@
  */
 /*#pragma OPTIONS inline+Pow*/
 
-char   *RCSId = "$Id: fsscale.c,v 2.38 1998-03-02 13:19:55+01 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.39 1998-06-04 15:29:06+02 fred Exp fred $";
 
 #include <X11/Ygl.h>
 #include <stdio.h>
@@ -212,6 +215,7 @@ typedef struct NumParams_ {
   double Vardummy, d,
     Xf,  Tc,  Z,  Lz,  Lc,   X,  Dx,  Lx, LLx,
     Yf,  Mc,  U,  Du,   Y,  Dy,  Ly, LLy,   M,  Lm;
+  double VarFactor;
 } NumParams;
 
 enum ActiveNames {
@@ -300,7 +304,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.38 $ (C) Fred Hucht 1995-1998\n"
+	    "$Revision: 2.39 $ (C) Fred Hucht 1995-1998\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
@@ -375,10 +379,11 @@ void Usage(int verbose) {
 	    "                      and xmgr-loadable file 'fsscale-PID-T,M.xmgr'\n"
 	    "  Key 'P':            as 'p', but don't delete datafiles on exit\n"
 	    "  Key 's':            Save actual graph to file 'fsscale.gif'\n"
-	    "  Key 'V':            Change evaluation function of variance\n"
 	    "  Key 'v':            Toggle drawing of variance function\n"
 	    "                      red curve: variance of datasets\n"
 	    "                      gray curve: previous variance\n"
+	    "  Key 'V':            Change evaluation function of variance\n"
+	    "  Key 'f'|'F':        Change prefactor Vf of variance\n"
 	    "  Key 'x':            Toggle X-axis linear/log scale\n"
 	    "  Key 'y':            Toggle Y-axis linear/log scale\n"
 	    "  Keys 'q'|Esc:       Quit\n"
@@ -767,6 +772,9 @@ double Valuate(NumParams *p) {
 	npvar++;
       }
     }
+    
+    var->v *= p->VarFactor;
+    
     /*Vmin = 0.0;if (p->Var[AV][k] > 0 && p->Var[AV][k] < VminYp) VminYp = p->Var[AV][k];*/
 #ifdef DEBUG
     printf("%g (%g,%g)\n", p->Var[AV][k].x, p->Var[AV][k].m, p->Var[AV][k].v);
@@ -995,7 +1003,7 @@ void DrawMain(const NumParams *p, GraphParams *g) {
   }
   
   if (p->Bewert) {
-    sprintf(text, "V%d = %e", p->VarType, p->Error);
+    sprintf(text, "Vf = %g; V%d = %e", p->VarFactor, p->VarType, p->Error);
     cmov2(CX = g->XSize - FRAME - strwidth(text), CY = g->FontD);
     color(g->Colors[2]);
     charstrC(text);
@@ -1679,6 +1687,8 @@ void ProcessQueue(NumParams *p, GraphParams *g) {
     case 'v': g->ShowVar ^= 1;               todo = ReVa; break;
     case 'V': p->VarType = (p->VarType + 1) % 4;
       todo = p->Bewert ? ReVa : ReNone; break;
+    case 'f': p->VarFactor *= 10.; todo = p->Bewert ? ReVa : ReNone; break;
+    case 'F': p->VarFactor *= 0.1; todo = p->Bewert ? ReVa : ReNone; break;
     case '<': p->d *= 0.1; todo = p->AutoExp ? ReCa : ReMa; break;
     case '>': p->d *= 10.; todo = p->AutoExp ? ReCa : ReMa; break;
     case 'x':
@@ -2071,6 +2081,7 @@ int main(int argc, char *argv[]) {
   P.Yf = 1.0;
   P.Ny = 1.0 / P.X;
   P.FullFit = 1;
+  P.VarFactor = 1.0;
   
   if (isatty(fileno(stdin)))
     fprintf(stderr, "%s: reading input from terminal.\n", P.Progname);
