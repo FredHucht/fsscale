@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995-2001
  *
- * $Id: fsscale.c,v 2.46 2001-02-15 10:37:57+01 fred Exp fred $
+ * $Id: fsscale.c,v 2.47 2001-02-19 10:44:50+01 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.47  2001-02-19 10:44:50+01  fred
+ * Grid now dotted
+ *
  * Revision 2.46  2001-02-15 10:37:57+01  fred
  * buffer overflow in ReadData
  *
@@ -146,7 +149,7 @@
  */
 /*#pragma OPTIONS inline+Pow*/
 
-char   *RCSId = "$Id: fsscale.c,v 2.46 2001-02-15 10:37:57+01 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.47 2001-02-19 10:44:50+01 fred Exp fred $";
 
 /* Note: AIX: Ignore warnings "No function prototype given for 'finite'" See math.h, line 429 */
 
@@ -328,7 +331,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.46 $ (C) Fred Hucht 1995-1998\n"
+	    "$Revision: 2.47 $ (C) Fred Hucht 1995-1998\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
@@ -529,6 +532,8 @@ void GraphInit(GraphParams *g) {
     MOUSEX,       MOUSEY,
     PAD1, PAD2, PAD3, PAD4, PAD5, PAD6, PAD7, PAD8, PAD9
   };
+  
+  putenv("YGL_GC=1"); /* To speed up dotted lines */
   
   minsize(g->XSize, g->YSize);
   g->MainW = winopen(g->Title);
@@ -1275,7 +1280,7 @@ void DrawPlot(NumParams *p) {
   
   if (Gp->ShowVar) {
     int av;
-    
+    setlinestyle(1);
     /* Draw mean */
     color(RED);
     for (k = 0; k < ASZ; k++) {
@@ -1296,6 +1301,7 @@ void DrawPlot(NumParams *p) {
       bgnenddraw(0);
       av = 1 - av;
     }
+    setlinestyle(0);
   }
   swapbuffers();
 }
