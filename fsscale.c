@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995, 1996
  *
- * $Id: fsscale.c,v 2.26 1998/02/03 12:31:02 fred Exp fred $
+ * $Id: fsscale.c,v 2.29 1998-02-09 15:58:48+01 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.29  1998-02-09 15:58:48+01  fred
+ * Y = ... * L^y -> Y = ... * (L - Lc)^Y
+ *
  * Revision 2.28  1998-02-09 15:40:21+01  fred
  * ExpB -> ExpD, DBL_MAX, some minors
  *
@@ -181,6 +184,8 @@ double ExpZ   = 1.0;
 double ExpU   = 1.0;
 double ExpLx  = 0.0;
 double ExpLy  = 0.0;
+double ExpLm  = 0.0;
+double ExpLz  = 0.0;
 double ExpDx  = 0.0;
 double ExpDy  = 0.0;
 double ExpDu  = 0.0;
@@ -216,7 +221,7 @@ int    Swh, FontH, FontD;
 char   *Title = "FSScale";
 char   *Progname;
 char   *Font  = "-*-Times-Medium-R-Normal--*-120-*-*-*-*-*-*";
-char   *RCSId = "$Id: fsscale.c,v 2.26 1998/02/03 12:31:02 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.29 1998-02-09 15:58:48+01 fred Exp fred $";
 char   GPName[256]   = "";
 char   XmgrName[256] = "";
 
@@ -224,19 +229,19 @@ char   XmgrName[256] = "";
 double dummy = 0.0, *Variables[] = {
   &dummy,
   &XFak,
-  &Tc, &ExpZ,
+  &Tc, &ExpZ, &ExpLz,
   &Lc,
   &ExpX, &ExpDx, &ExpLx,
   &YFak,
   &Mc, &ExpU, &ExpDu,
   &ExpY, &ExpDy, &ExpLy,
-  /*Tc*/ &ExpM
+  /*Tc*/ &ExpM, &ExpLm
 };
 enum   ActiveNames {
-  AOff, AXF, ATc, AZ, ALc, AX, ADx, ALx, AYF, AMc, AU, ADu, AY, ADy, ALy, AM
+  AOff, AXF, ATc, AZ, ALz, ALc, AX, ADx, ALx, AYF, AMc, AU, ADu, AY, ADy, ALy, AM, ALm
 };
 int Actives[NUMACTIVE] = {
-  0,    1,   2,   3,  4,   5,/*6*/  7,   8,   9,   10,/*11*/12,/*13*/14,  15
+  0,    1,   2,   3,  4,   5,   6,/*7*/  8,   9,  10,   11,/*12*/13,/*14*/15,  16, 17
 };
 int Active = AOff, Activei = 0, NumActive = NUMACTIVE - 3;
 
@@ -278,7 +283,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.26 $ (C) Fred Hucht 1995-1998\n"
+	    "$Revision: 2.29 $ (C) Fred Hucht 1995-1998\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
@@ -300,12 +305,12 @@ void Usage(int verbose) {
 	    "  -y <y>              Preset Exponent y (default: 1)\n"
 	    "  -m <m>              Preset Exponent m (default: 1)\n"
 	    "  -A <i1,i2,...>      Define which variables can be activated using\n"
-	    "                      pad4/pad6 (see below). Use 2,5,12 for Tc,x,y\n"
-	    "                      1:Xsign 2:Tc  3:z  4:Lc 5:x\n"
-	    "                      8:Ysign 9:Mc 10:u 12:y 15:m (default: all)\n"
+	    "                      pad4/pad6 (see below). Use 2,6,13 for Tc,x,y\n"
+	    "                      1:Xsign  2:Tc  3:z  5:Lc  6:x\n"
+	    "                      9:Ysign 10:Mc 11:u 13:y  16:m (default: all)\n"
 	    "  -4                  Input has 4 columns, 4th is called D by default.\n"
 	    "                      D appears in several exponents of the scaling function\n"
-	    "                      using the keypad keys.\n"
+	    "                      using the numpad keys.\n"
 	    /*"  -n Ny              Preset Ny\n"
 	      "  -b Beta            Preset Beta/Gamma\n"*/
 	    /*"  -g                 Change from Ny/Beta to Ny/Gamma\n"*/
@@ -322,7 +327,7 @@ void Usage(int verbose) {
 	    "\n"
 	    "  Keys pad4/pad6:     Change active variable. The active variable\n"
 	    "                      is highlighted in the formula and can be changed\n"
-	    "                      with the keypad keys 1,2,3,7,8,9. The index of the\n"
+	    "                      with the numpad keys 1,2,3,7,8,9. The index of the\n"
 	    "                      active variable is displayed in the lower right\n"
 	    "                      corner (see option -A).\n"
 	    "  Keys pad1/pad7:     Change activated variable by  10 * d\n"
@@ -558,13 +563,14 @@ void Calculate(void) {
   
   for (i = 0; i < S; i++) if (Set[i].active) {
     Set_t *s  = &Set[i];
-    double Lx = XFak * pow(s->L - Lc, ExpX + ExpDx * s->D) * pow(log(s->L), ExpLx);
-    double Ly = YFak * pow(s->L - Lc, ExpY + ExpDy * s->D) * pow(log(s->L), ExpLy);
+    double Lx = XFak * pow(s->L - Lc, ExpX + ExpDx * s->D) * pow(log(s->L - Lc), ExpLx);
+    double Ly = YFak * pow(s->L - Lc, ExpY + ExpDy * s->D) * pow(log(s->L - Lc), ExpLy);
     
     for (j = 0; j < s->N; j++) {
       Data_t *d = &s->Data[j];
-      double x  = d->x[0] = pow(d->T - Tc, ExpZ) * Lx;
-      double y  = d->x[1] = pow(d->M - Mc, ExpU + ExpDu * s->D) * Ly * pow(d->T - Tc, ExpM);
+      double x = d->x[0] = pow(d->T - Tc, ExpZ) * (ExpLz ? pow(log(d->T - Tc), ExpLz) : 1.0) * Lx;
+      double y = d->x[1] = pow(d->M - Mc, ExpU + ExpDu * s->D) * Ly
+	* pow(d->T - Tc, ExpM) * (ExpLm ? pow(log(d->T - Tc), ExpLm) : 1.0);
       
       d->lx[0] = (x > 0.0) ? log10(x) : 0.0;
       d->lx[1] = (y > 0.0) ? log10(y) : 0.0;
@@ -789,19 +795,22 @@ void CalcTicks(struct Ticks_* t, int Log, double d) {
   t->l0 = 0;
   t->l1 = 0;
   if (Log) {
-    if (t->t0 < 2.0) {
+    if (t->t0 <= 1.0) {
       t->l1 = 1;
       t->t1 = log10(x[i][1]) * exp10(fl10);
     }
-    /* if (t->t0 < 1.0) {
-       t->l0 = 1;
-       t->t0 = log10(x[i][0]) * exp10(fl10);
-       }*/
+#if 0
+    if (l10 < -0.5 /*t->t0 < 1.0*/) {
+      t->l0 = 1;
+      t->t0 = exp10(fl10+1);
+    }
+#endif
   }
 #if 0
-  fprintf(stderr, "%g %g %d %d\n",
-	  Log ? exp10(t->t0) : t->t0,
-	  Log ? exp10(t->t1) : t->t1,
+  fprintf(stderr, "%g  %g %g %d %d\n",
+	  l10, 
+	  t->t0,
+	  t->t1,
 	  t->l0, t->l1);
 #endif
 
@@ -842,6 +851,7 @@ void charstrH(char *text, int h) {
 void Draw(void) {
   int i, j, ncx, ncy;
   char lmlc[80], tmtc[80], mmmc[80], text[256];
+  char logtmtc[80], loglmlc[80];
   double x, y;
   double dxmin, dxmax, dymin, dymax;
   
@@ -869,6 +879,9 @@ void Draw(void) {
   sprintf(mmmc, Mc || Active == AMc ? "(%s#%c%+g#0)" : "%s",
 	  Names[2], (Active == AMc) + '0', -Mc);
   
+  sprintf(logtmtc, "log%s%s%s", Tc ? "" : "(", tmtc, Tc ? "" : ")");
+  sprintf(loglmlc, "log%s%s%s", Lc ? "" : "(", lmlc, Lc ? "" : ")");
+  
   sprintf(text, "d = %g; X = #%c%s#0%s", Delta, (Active == AXF) + '0',
 	  XFak < 0.0 ? "-" : Active == AXF ? "+" : "", tmtc);
   /* (T - Tc) */
@@ -880,6 +893,20 @@ void Draw(void) {
     sprintf(text, "#%c%g#0", (Active == AZ) + '0', ExpZ);
     charstrH(text, FontH/2);
     ncx += sprintf(Xlab + ncx, "\\S%g\\N", ExpZ);
+  }
+  
+  /* * log(T - Tc) */
+  if (ExpLz || Active == ALz) {
+    sprintf(text, " * %s", logtmtc);
+    charstrC(text);
+    ncy += sprintf(Ylab + ncy, " * \\%s", logtmtc);
+    
+    /* ^ExpLz */
+    if (ExpLz != 1.0 || Active == ALz) {
+      sprintf(text, "#%c%g#0", (Active == ALz) + '0', ExpLz);
+      charstrH(text, FontH/2);
+      ncy += sprintf(Ylab + ncy, "\\S%g\\N", ExpLz);
+    }
   }
   
   /* * (L - Lc) */
@@ -913,11 +940,13 @@ void Draw(void) {
     }
   }
   
-  /* * log(L)^ExpLx */
+  /* * log(L - Lc) */
   if (ExpLx || Active == ALx) {
-    sprintf(text, " * log(%s)", Names[0]);
+    sprintf(text, " * %s", loglmlc);
     charstrC(text);
-    ncx += sprintf(Xlab + ncx, " * \\log(%s)", Names[0]);
+    ncx += sprintf(Xlab + ncx, " * \\%s", loglmlc);
+    
+    /* ^ExpLx */
     if (ExpLx != 1.0 || Active == ALx) {
       sprintf(text, "#%c%g#0", (Active == ALx) + '0', ExpLx);
       charstrH(text, FontH/2);
@@ -993,11 +1022,13 @@ void Draw(void) {
     }
   }
   
-  /* * log(L)^ExpLy */
+  /* * log(L - Lc) */
   if (ExpLy || Active == ALy) {
-    sprintf(text, " * log(%s)", Names[0]);
+    sprintf(text, " * %s", loglmlc);
     charstrC(text);
-    ncy += sprintf(Ylab + ncy, " * \\log(%s)", Names[0]);
+    ncy += sprintf(Ylab + ncy, " * \\%s", loglmlc);
+    
+    /* ^ExpLy */
     if (ExpLy != 1.0 || Active == ALy) {
       sprintf(text, "#%c%g#0", (Active == ALy) + '0', ExpLy);
       charstrH(text, FontH/2);
@@ -1016,6 +1047,20 @@ void Draw(void) {
       sprintf(text, "#%c%g#0", (Active == AM) + '0', ExpM);
       charstrH(text, FontH/2);
       ncy += sprintf(Ylab + ncy, "\\S%g\\N", ExpM);
+    }
+  }
+  
+  /* * log(T - Tc) */
+  if (ExpLm || Active == ALm) {
+    sprintf(text, " * %s", logtmtc);
+    charstrC(text);
+    ncy += sprintf(Ylab + ncy, " * \\%s", logtmtc);
+    
+    /* ^ExpLm */
+    if (ExpLm != 1.0 || Active == ALm) {
+      sprintf(text, "#%c%g#0", (Active == ALm) + '0', ExpLm);
+      charstrH(text, FontH/2);
+      ncy += sprintf(Ylab + ncy, "\\S%g\\N", ExpLm);
     }
   }
   
@@ -1040,7 +1085,7 @@ void Draw(void) {
   }
   
 #if 0
-  fprintf(stderr, "%g %g %g %g\n", OXmin, OXmax, OYmin, OYmax);
+  fprintf(stderr, "OXY: %g %g %g %g\n", OXmin, OXmax, OYmin, OYmax);
 #endif
   
   ortho2(OXmin, OXmax, OYmin, OYmax);
@@ -1061,7 +1106,7 @@ void Draw(void) {
   for (x = Ticks[0].t0 * floor(OXmin / Ticks[0].t0);
        x < OXmax;
        x = Ticks[0].l0
-	 ? log10(exp10(x) + exp10(Ticks[0].t0))
+	 ? log10(exp10(x) + Ticks[0].t0)
 	 : x + Ticks[0].t0) { 
     double xx;
     if (fabs(x / Ticks[0].t0) < 1e-10) x = 0.0;
@@ -1072,11 +1117,12 @@ void Draw(void) {
     }
     color(GRAY);
     DrawTickX(x, 0);
-    if (LogX == Ticks[0].l0) {
-      sprintf(text, "%g", x); /*printf(       "%g\n", x);*/
+    if (!LogX/* == Ticks[0].l0*/) {
+      sprintf(text, "%g", x);
     } else {
-      sprintf(text, "%.3g", exp10(x));/*printf(       "%.3g\n", exp10(x));*/
+      sprintf(text, "%.3g", exp10(x));
     }
+    /*fprintf(stderr, "%s (%g)\n", text, x);*/
     color(FgColor);
     cmov2(x, OYmin); charstr(text);
   }
@@ -1084,7 +1130,7 @@ void Draw(void) {
   for (y = Ticks[1].t0 * floor(OYmin / Ticks[1].t0);
        y < OYmax;
        y = Ticks[1].l0
-	 ? log10(exp10(y) + exp10(Ticks[1].t0))
+	 ? log10(exp10(y) + Ticks[1].t0)
 	 : y + Ticks[1].t0) {
     double yy;
     if (fabs(y / Ticks[1].t0) < 1e-10) y = 0.0;
@@ -1096,13 +1142,13 @@ void Draw(void) {
     color(GRAY);
     DrawTickY(y, 0);
     if (LogY == Ticks[1].l0) {
-      sprintf(text, "%g", y); /*printf("%g\n", y);*/
+      sprintf(text, "%g", y);
     } else {
-      sprintf(text, "%.3g", exp10(y));/*printf("%.3g\n", exp10(y));*/
+      sprintf(text, "%.3g", exp10(y));
     }
+    /*fprintf(stderr, "%s (%g)\n", text, y);*/
     color(FgColor);
     cmov2(OXmin, y); charstr(text);
-    color(GRAY);
   }
   
   for (i = 0; i < S; i++) {
@@ -1449,7 +1495,7 @@ void ProcessQueue(void) {
       Tc   = Tc_o;
       Lc = Mc = 0;
       ExpZ = ExpU = XY = 1;
-      ExpLx = ExpLy = 0;
+      ExpLx = ExpLy = ExpLm = ExpLz = 0;
       ExpDx = ExpDy = ExpDu = 0;
       XFak = YFak = 1.0;
       break;
