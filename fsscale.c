@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995-1998
  *
- * $Id: fsscale.c,v 2.34 1998/02/27 17:48:16 fred Exp fred $
+ * $Id: fsscale.c,v 2.35 1998-02-27 21:28:51+01 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.35  1998-02-27 21:28:51+01  fred
+ * Removed LVar, LFit stuff
+ *
  * Revision 2.34  1998/02/27 17:48:16  fred
  * Reordered todo stuff
  *
@@ -106,6 +109,9 @@
  *
  *
  */
+
+char   *RCSId = "$Id: fsscale.c,v 2.35 1998-02-27 21:28:51+01 fred Exp fred $";
+
 #include <X11/Ygl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -140,7 +146,6 @@ typedef struct Data_t_ {
   double T;			/* X-axis, normally temperature */
   double M;			/* Y-axis, normally order parameter */
   double x,  y;			/* Plot position {x,y} */
-  /*double lx, ly;		Log Plot position {lx,ly} */
 } Data_t;
 
 typedef struct Set_t_ {
@@ -159,120 +164,92 @@ typedef struct Set_t_ {
 #endif
 } Set_t;
 
-struct Ticks_ {
-  double t0, t1;
-  int    l0, l1;
-} Ticks[2];
-
-int    AV = 0;
-
-struct Var_ {
-  double x, m, v;
-} Var[2][ASZ];
-
-double Error;
-
-int  Colors[] = {WHITE, GREEN, YELLOW, CYAN, MAGENTA, RED, GRAY};
-Int32 FgColor = WHITE;
-Int32 BgColor = BLACK;
-int   GrayVal = 180;
-
-Set_t  *Set = NULL;
-int    S = 0;				/* Number of sets */
-double Xmin, XminXp, XminYp;		/* range of data and */
-double Ymin, YminXp, YminYp;		/* smallest positive */
-double Vmin, VminXp, VminYp;		/* for variance function */
-double Xmax, XmaxYp;
-double Ymax, YmaxXp;
-double Vmax, VmaxXp;
-double OFmin, OFmax;			/* For fit range */
-double OXmin, OXmax, OYmin, OYmax; 	/* Drawing range */
-int    LogX   = 0;
-int    LogY   = 0;
-double Tc_o   = 0.0, Tc    = 0.0;
-double Mc     = 0.0;
-double Lc     = 0.0;
-double Ny     = 0.0;
-double Beta   = 0.0;
-double ExpX_o = 0.0, ExpX  = 0.0;
-double ExpY_o = 0.0, ExpY  = 0.0;
-double ExpM_o = 0.0, ExpM  = 0.0;
-double ExpZ   = 1.0;
-double ExpU   = 1.0;
-double ExpLx  = 0.0;
-double ExpLy  = 0.0;
-double ExpLm  = 0.0;
-double ExpLz  = 0.0;
-double ExpDx  = 0.0;
-double ExpDy  = 0.0;
-double ExpDu  = 0.0;
-double XFak   = 1.0;
-double YFak   = 1.0;
-int    Lines  = 1;
-int    Grid   = 0;
-Int32  XSize  = 400;
-Int32  YSize  = 400;
-Int32  XPos;
-Int32  YPos;
-Int32  PXSize;
-Int32  PYSize;
-Int32  PXPos;
-Int32  PYPos;
-int    NumRows = 3;
-/*
-  char   *BetaName = "Beta";
-  double BetaFak   = 1.0;
-  */
-char   *Names[] = {"L", "T", "M", "D"};
-char   Xlab[256], Ylab[256];
-int    AutoScale    = 1;
-int    Rewrite      = 1;
-int    Bewert       = 0;
-int    ShowVar      = 0;
-int    ShiftKey     = 0;
-int    FullFit      = 1;
-double MeanL;
-int    RemoveFiles  = 1;
-double Delta        = 0.1;
-/*time_t starttime;*/
-Int32  MainW, PlotW;
-int    Swh, FontH, FontD;
-char   *Title = "FSScale";
-char   *Progname;
-char   *Font  = "-*-Times-Medium-R-Normal--*-120-*-*-*-*-*-*";
-char   *RCSId = "$Id: fsscale.c,v 2.34 1998/02/27 17:48:16 fred Exp fred $";
-char   GPName[256]   = "";
-char   XmgrName[256] = "";
-
-#define NUMACTIVE (sizeof(Variables)/sizeof(Variables[0]))
-double dummy = 0.0, *Variables[] = {
-  &dummy,
-  &XFak,
-  &Tc, &ExpZ, &ExpLz,
-  &Lc,
-  &ExpX, &ExpDx, &ExpLx,
-  &YFak,
-  &Mc, &ExpU, &ExpDu,
-  &ExpY, &ExpDy, &ExpLy,
-  &ExpM, &ExpLm
-};
 enum   ActiveNames {
-  AOff, AXF, ATc, AZ, ALz, ALc, AX, ADx, ALx, AYF, AMc, AU, ADu, AY, ADy, ALy, AM, ALm
+  AOff, AXF, ATc, AZ, ALz, ALc, AX, ADx, ALx, AYF, AMc, AU, ADu, AY, ADy, ALy, AM, ALm, ALast
 };
-int Actives[NUMACTIVE] = {
-  0,    1,   2,   3,  4,   5,   6,/*7*/  8,   9,  10,   11,/*12*/13,/*14*/15,  16, 17
-};
-int Active  = AOff, Activei = 0, NumActive = NUMACTIVE - 3;
-int VarType = 0, AutoExp = AOff;
 
-void write_both(int);
+typedef struct GraphParams_ {
+  int   Colors[7];
+  Int32 FgColor;
+  Int32 BgColor;
+  int   GrayVal;
+  int   AutoScale;
+  int   Lines;
+  int   Grid;
+  int   RemoveFiles;
+  Int32 XSize,  YSize;
+  char  *Title;
+  char  *Font;
+  char  *Names[4];
+  const double LevelLen[2];
+  int   Actives[ALast];
+  
+  int   Active;
+  int   NumActive;
+  char  GPName[256];
+  char  XmgrName[256];
+  Int32 XPos,   YPos;
+  Int32 PXSize, PYSize;
+  Int32 PXPos,  PYPos;
+  char  Xlab[256], Ylab[256];
+  Int32 MainW, PlotW;
+  int   Swh, FontH, FontD;
+  int   ShiftKey;
+  int   ShowVar;
+} GraphParams;
+
+typedef struct NumParams_ {
+  Set_t  *Set;
+  int    S;				/* Number of sets */
+  int    LogX;
+  int    LogY;
+  int    AV;
+  int    VarType;
+  int    AutoExp;
+  int    Bewert;
+  int    FullFit;
+  int    NumRows;
+  struct Var_ {
+    double x, m, v;
+  } Var[2][ASZ];
+  double Error;
+  char  *Progname;
+  struct Ticks_ {
+    double t0, t1;
+    int    l0, l1;
+  } Ticks[2];
+  double Xmin, XminXp, XminYp;		/* range of data and */
+  double Ymin, YminXp, YminYp;		/* smallest positive */
+  double Vmin, VminXp, VminYp;		/* for variance function */
+  double Xmax, XmaxYp;
+  double Ymax, YmaxXp;
+  double Vmax, VmaxXp;
+  double OFmin, OFmax;			/* For fit range */
+  double OXmin, OXmax, OYmin, OYmax; 	/* Drawing range */
+  double Tc_o;
+  double ExpX_o;
+  double ExpY_o;
+  double ExpM_o;
+  double Ny;
+  double Beta;
+  double Delta;
+
+  double Vardummy;
+  double XFak, Tc, ExpZ, ExpLz, Lc, ExpX, ExpDx, ExpLx;
+  double YFak, Mc, ExpU, ExpDu, ExpY, ExpDy, ExpLy, ExpM, ExpLm;
+} NumParams;
+
+const GraphParams *Gp;
+const NumParams   *Pp;
+
+int  write_both   (int, int);
 void write_gnuplot(void);
-void write_xmgr(void);
-void write_dats(void);
-void byebye(int sig);
+void write_xmgr   (void);
+void write_dats   (void);
+void byebye       (int sig);
 
 void byebye(int sig) {
-  if (RemoveFiles) {
+  if (Gp->RemoveFiles) {
 #ifdef GNUPLOT_DATFILES
     int i;
     for (i = 0; i < S; i++) {
@@ -280,8 +257,8 @@ void byebye(int sig) {
       if (s->datfilename[0] != 0) remove(s->datfilename);
     }
 #endif
-    if (  GPName[0] != 0) remove(  GPName);
-    if (XmgrName[0] != 0) remove(XmgrName);
+    if (  Gp->GPName[0] != 0) remove(  Gp->GPName);
+    if (Gp->XmgrName[0] != 0) remove(Gp->XmgrName);
   }
   exit(sig);
 }
@@ -296,15 +273,15 @@ void Usage(int verbose) {
 	  "Usage: %s [-h] [-t <Tc>] [-x <x>] [-y <y>] [-m <m>] [-lx] [-ly]\n"
 	  "               [-N <name1,name2,name3>] [-T <title>] [-f <font>] [-r]\n"
 	  "               [-A <i1,...,in> ] [-4]\n"
-	  , Progname);
+	  , Pp->Progname);
   if (!verbose)
     fprintf(stderr,
 	    "Type '%s -h' for long help\n"
-	    , Progname);
+	    , Pp->Progname);
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.34 $ (C) Fred Hucht 1995-1998\n"
+	    "$Revision: 2.35 $ (C) Fred Hucht 1995-1998\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
@@ -387,79 +364,82 @@ void Usage(int verbose) {
 	    "  Keys 'q'|Esc:       Quit\n"
 	    "  Keys \"00\"-\"98\":     Activate/deactivate dataset 00-99\n"
 	    "  Keys \"99\":            Activate/deactivate all datasets\n"
-	    , Progname);
+	    , Pp->Progname);
   exit(1);
 }
 
-void GetArgs(int argc, char *argv[]) {
+void GetArgs(NumParams *p, GraphParams *g, int argc, char *argv[]) {
   int ch;
   int optA = 0;
   extern int optind;
   extern char *optarg;
   
+  p->NumRows = 3;
+  g->NumActive = ALast - 3;
+  
   while ((ch = getopt(argc, argv, "ht:x:y:m:l:vN:T:f:rA:4?")) != EOF)
     switch(ch) {
-      char *p;
+      char *ptr;
       /* case 'g':BetaName = "Gamma";BetaFak  = -1.0;break; */
     case 'h':
       Usage(1);
       break;
       /*case 'n': Ny   = atof(optarg); break;
 	case 'b': Beta = atof(optarg); break;*/
-    case 't': Tc_o   = Tc   = atof(optarg); break;
-    case 'x': ExpX_o = ExpX = atof(optarg); break;
-    case 'y': ExpY_o = ExpY = atof(optarg); break;
-    case 'm': ExpM_o = ExpM = atof(optarg); break;
-    case 'v': Bewert = ShowVar = 1; break;
+    case 't': p->Tc_o   = p->Tc   = atof(optarg); break;
+    case 'x': p->ExpX_o = p->ExpX = atof(optarg); break;
+    case 'y': p->ExpY_o = p->ExpY = atof(optarg); break;
+    case 'm': p->ExpM_o = p->ExpM = atof(optarg); break;
+    case 'v': p->Bewert = g->ShowVar = 1; break;
     case 'N':
-      Names[0] = strtok(optarg, ",");
-      Names[1] = strtok(NULL,   ",");
-      Names[2] = strtok(NULL,   ",");
-      Names[3] = strtok(NULL,   ",");
+      g->Names[0] = strtok(optarg, ",");
+      g->Names[1] = strtok(NULL,   ",");
+      g->Names[2] = strtok(NULL,   ",");
+      g->Names[3] = strtok(NULL,   ",");
       break;
     case 'A':
       {
-	int a = 1; /* El. 0 is dummy */
+	int a = 1; /* El. 0 is Vardummy */
 	char *s, *arg = optarg;
 	while ((s = strtok(arg, ","))) {
 	  int i = atoi(s);
-	  if (i < 1 || i > NUMACTIVE - 1) {
+	  if (i < 1 || i > ALast - 1) {
 	    fprintf(stderr, "%s: Params of option -A must be [1,%d]\n",
-		    Progname, NUMACTIVE - 1);
+		    Pp->Progname, ALast - 1);
 	    exit(1);
 	  }
-	  Actives[a++] = i;
+	  g->Actives[a++] = i;
 	  arg = NULL;
 	}
-	NumActive = a;
+	g->NumActive = a;
 	optA = 1;
       }
       break;
     case '4':
       if (!optA) {
 	int a;
-	for (a = 1; a < NUMACTIVE; a++) Actives[a] = a;
-	NumActive = NUMACTIVE;
+	for (a = 1; a < ALast; a++) g->Actives[a] = a;
+	g->NumActive = ALast;
       }
-      NumRows = 4;
+      p->NumRows = 4;
       break;
     case 'T':
-      Title = optarg;
+      g->Title = optarg;
       break;
     case 'f':
-      Font = optarg;
+      g->Font = optarg;
       break;
     case 'r':
-      FgColor   = BLACK;
-      BgColor   = WHITE;
-      GrayVal   = 80;
-      Colors[0] = BLACK;
-      Colors[2] = BLUE;
+      g->FgColor   = BLACK;
+      g->BgColor   = WHITE;
+      g->GrayVal   = 80;
+      g->Colors[0] = BLACK;
+      g->Colors[2] = BLUE;
       break;      
     case 'l':
-      for (p = optarg; *p != '\0'; p++) switch(*p) {
-      case 'x': LogX = 1; break;
-      case 'y': LogY = 1; break;
+      for (ptr = optarg; *ptr != '\0'; ptr++) switch(*ptr) {
+      case 'x': p->LogX = 1; break;
+      case 'y': p->LogY = 1; break;
       default:  Usage(0); break;
       }
       break;
@@ -469,10 +449,10 @@ void GetArgs(int argc, char *argv[]) {
     }
   argc -= optind;
   
-  if (Names[0] == NULL || Names[1] == NULL ||
-      Names[2] == NULL || (NumRows == 4 && Names[3] == NULL)) {
+  if (g->Names[0] == NULL || g->Names[1] == NULL ||
+      g->Names[2] == NULL || (p->NumRows == 4 && g->Names[3] == NULL)) {
     fprintf(stderr, "option -N requires %d comma seperated names.\n",
-	    NumRows);
+	    p->NumRows);
     exit(1);
   }
   
@@ -481,7 +461,7 @@ void GetArgs(int argc, char *argv[]) {
     ExpY  = Beta * ExpX;*/
 }
 
-void GraphInit(void) {
+void GraphInit(GraphParams *g) {
   int i;
   Device Devs[] =  {
     KEYBD,        INPUTCHANGE,
@@ -495,44 +475,42 @@ void GraphInit(void) {
     PAD6, PAD7, PAD8, PAD9
   };
   
-  minsize(XSize, YSize);
-  MainW = winopen(Title);
-  loadXfont(1, Font);
+  minsize(g->XSize, g->YSize);
+  g->MainW = winopen(g->Title);
+  loadXfont(1, g->Font);
   font(1);
   
-  FontH = getheight();
-  FontD = getdescender();
-  Swh   = 3 * FontH + FontH/2 + 2;
+  g->FontH = getheight();
+  g->FontD = getdescender();
+  g->Swh   = 3 * g->FontH + g->FontH/2 + 2;
   
   /* Plot window */
-  prefposition(FRAME, XSize - FRAME - 1,
-	       Swh,   YSize - FRAME - 1);
-  PlotW = swinopen(MainW);
+  prefposition(FRAME, g->XSize - FRAME - 1,
+	       g->Swh,   g->YSize - FRAME - 1);
+  g->PlotW = swinopen(g->MainW);
   doublebuffer();
   gconfig();
   for (i = 0; i < sizeof(Devs)/sizeof(Device); i++) qdevice(Devs[i]);
   tie(LEFTMOUSE, MOUSEX, MOUSEY);
-  mapcolor(GRAY, GrayVal, GrayVal, GrayVal);
+  mapcolor(GRAY, g->GrayVal, g->GrayVal, g->GrayVal);
   mapcolor(ACOLOR, 64, 255, 64);
   font(1);
   
-  /*deflinestyle(1, 0xAAAA);*/
-  deflinestyle(1, 0x8888);
+  deflinestyle(1, 0xAAAA);
+  deflinestyle(2, 0x8888);
 }
 
-void ReadData(void) {
+void ReadData(NumParams *p) {
   Set_t *s;
   char buf[1024];
   double oldL = NODATA;
   int lineno = 0;
   
-  if (Set) perror("Set...");
+  if (p->Set) perror("Set...");
   
-  Set = (Set_t*) malloc(sizeof(Set_t)); /* First set */
-  S   = -1;
-  s   = Set;
-  
-  MeanL = 1.0;
+  p->Set = (Set_t*) malloc(sizeof(Set_t)); /* First set */
+  p->S   = -1;
+  s      = p->Set;
   
   while (!feof(stdin)) {
     fgets(buf, sizeof(buf), stdin);
@@ -540,19 +518,18 @@ void ReadData(void) {
     if (buf[0] != '#') {
       double L, T, M, D = 0.0;
       int n = sscanf(buf, "%lf %lf %lf %lf", &L, &T, &M, &D);
-      if (n >= NumRows) { /* Valid */
+      if (n >= p->NumRows) { /* Valid */
 #if 0
 	fprintf(stdout, "%lf %lf %lf %lf\n", L, T, M ,D);
 #endif
 	if (L != oldL) { /* New set */
 	  oldL      = L;
-	  S++;
-	  Set       = (Set_t*) realloc(Set, (S+1) * sizeof(Set_t));
-	  s         = &Set[S];
+	  p->S++;
+	  p->Set       = (Set_t*) realloc(p->Set, (p->S+1) * sizeof(Set_t));
+	  s         = &p->Set[p->S];
 	  s->L      = L;
-	  MeanL    *= L;
-	  if (NumRows == 4) s->D = D;
-	  s->color  = Colors[S % (sizeof(Colors)/sizeof(Colors[0]))];
+	  s->D      = D;
+	  s->color  = Gp->Colors[p->S % (sizeof(Gp->Colors)/sizeof(Gp->Colors[0]))];
 	  s->active = 1;
 	  s->N      = 0;
 	  s->Data   = (Data_t*) malloc(sizeof(Data_t));
@@ -570,59 +547,54 @@ void ReadData(void) {
 	s->N++;
       } else if (n > 0) {
 	fprintf(stderr, "%s: Only %d column%s at line %d.\n",
-		Progname, n, n == 1 ? "" : "s", lineno);
+		p->Progname, n, n == 1 ? "" : "s", lineno);
       }
     }
   }
-  S++;
-  if (S == 0) {
-    fprintf(stderr, "%s: No Data.\n", Progname);
+  p->S++;
+  if (p->S == 0) {
+    fprintf(stderr, "%s: No Data.\n", p->Progname);
     exit(1);
   }
-  
-  MeanL = pow(MeanL, 1.0 / S);
 }
 
-void Calculate(void) {
+void Calculate(NumParams *p) {
   int i, j;
   
-  Xmin = XminXp = XminYp = DBL_MAX;
-  Ymin = YminXp = YminYp = DBL_MAX;
-  Xmax = XmaxYp = -DBL_MAX;
-  Ymax = YmaxXp = -DBL_MAX;
+  p->Xmin = p->XminXp = p->XminYp = DBL_MAX;
+  p->Ymin = p->YminXp = p->YminYp = DBL_MAX;
+  p->Xmax = p->XmaxYp = -DBL_MAX;
+  p->Ymax = p->YmaxXp = -DBL_MAX;
   
-  for (i = 0; i < S; i++) if (Set[i].active) {
-    Set_t *s  = &Set[i];
-    double Lx = XFak * pow(s->L - Lc, ExpX + ExpDx * s->D) * pow(log(s->L - Lc), ExpLx);
-    double Ly = YFak * pow(s->L - Lc, ExpY + ExpDy * s->D) * pow(log(s->L - Lc), ExpLy);
+  for (i = 0; i < p->S; i++) if (p->Set[i].active) {
+    Set_t *s  = &p->Set[i];
+    double Lx = p->XFak * pow(s->L - p->Lc, p->ExpX + p->ExpDx * s->D) * pow(log(s->L - p->Lc), p->ExpLx);
+    double Ly = p->YFak * pow(s->L - p->Lc, p->ExpY + p->ExpDy * s->D) * pow(log(s->L - p->Lc), p->ExpLy);
     
     for (j = 0; j < s->N; j++) {
       Data_t *d = &s->Data[j];
-      double x = d->x = pow(d->T - Tc, ExpZ) * (ExpLz ? pow(log(d->T - Tc), ExpLz) : 1.0) * Lx;
-      double y = d->y = pow(d->M - Mc, ExpU + ExpDu * s->D) * Ly
-	* pow(d->T - Tc, ExpM) * (ExpLm ? pow(log(d->T - Tc), ExpLm) : 1.0);
+      d->x = pow(d->T - p->Tc, p->ExpZ) * (p->ExpLz ? pow(log(d->T - p->Tc), p->ExpLz) : 1.0) * Lx;
+      d->y = pow(d->M - p->Mc, p->ExpU + p->ExpDu * s->D) * Ly
+	* pow(d->T - p->Tc, p->ExpM) * (p->ExpLm ? pow(log(d->T - p->Tc), p->ExpLm) : 1.0);
       
-      /*d->lx = (x > 0.0) ? log10(x) : 0.0;
-	d->ly = (y > 0.0) ? log10(y) : 0.0;*/
-      
-      if (finite(x) && finite(y)) {
-	if (         x < Xmin)   Xmin   = x;
-	if (x > 0 && x < XminXp) XminXp = x;
-	if (y > 0 && x < XminYp) XminYp = x;
-	if (         y < Ymin)   Ymin   = y;
-	if (x > 0 && y < YminXp) YminXp = y;
-	if (y > 0 && y < YminYp) YminYp = y;
-	if (         x > Xmax)   Xmax   = x;
-	if (y > 0 && x > XmaxYp) XmaxYp = x;
-	if (         y > Ymax)   Ymax   = y;
-	if (x > 0 && y > YmaxXp) YmaxXp = y;
+      if (finite(d->x) && finite(d->y)) {
+	if (            d->x < p->Xmin)   p->Xmin   = d->x;
+	if (d->x > 0 && d->x < p->XminXp) p->XminXp = d->x;
+	if (d->y > 0 && d->x < p->XminYp) p->XminYp = d->x;
+	if (            d->y < p->Ymin)   p->Ymin   = d->y;
+	if (d->x > 0 && d->y < p->YminXp) p->YminXp = d->y;
+	if (d->y > 0 && d->y < p->YminYp) p->YminYp = d->y;
+	if (            d->x > p->Xmax)   p->Xmax   = d->x;
+	if (d->y > 0 && d->x > p->XmaxYp) p->XmaxYp = d->x;
+	if (            d->y > p->Ymax)   p->Ymax   = d->y;
+	if (d->x > 0 && d->y > p->YmaxXp) p->YmaxXp = d->y;
 #if 0
 	fprintf(stderr,
 		"x=%f y=%f Xmin=%f XminXp=%f XminYp=%f "
 		"Ymin=%f YminXp=%f YminYp=%f "
 		"Xmax=%f XmaxYp=%f "
 		"Ymax=%f YmaxXp=%f\n",
-		x, y,
+		d->x, d->y,
 		Xmin, XminXp, XminYp,
 		Ymin, YminXp, YminYp,
 		Xmax, XmaxYp,
@@ -645,58 +617,54 @@ void Calculate(void) {
 #endif
 }
 
-double Valuate(void) {
-  int i, j, k, nvar = 0, nvarp = 0;
-  double ret   = 0.0;
-  double var   = 0.0;
-  double varp  = 0.0;
-  double fmin, fmax;
+double Valuate(NumParams *p) {
+  int i, j, k, nsvar = 0, npvar = 0;
+  double fmin, fmax, ret = 0.0, svar = 0.0, pvar = 0.0;
   
-  Vmin   = Ymin;
-  VminXp = YminXp;
-  VminYp = YminYp;
-  Vmax   = Ymax;
-  VmaxXp = YmaxXp;
+  p->Vmin   = p->Ymin;
+  p->VminXp = p->YminXp;
+  p->VminYp = p->YminYp;
+  p->Vmax   = p->Ymax;
+  p->VmaxXp = p->YmaxXp;
   
-  fmin = OXmin + OFmin * (OXmax - OXmin);
-  fmax = OXmin + OFmax * (OXmax - OXmin);
+  fmin = p->OXmin + p->OFmin * (p->OXmax - p->OXmin);
+  fmax = p->OXmin + p->OFmax * (p->OXmax - p->OXmin);
   
-  if (LogX) {
+  if (p->LogX) {
     fmin = exp10(fmin);
     fmax = exp10(fmax);
   }
   
-  if (FullFit || fmin < Xmin) fmin = Xmin;
-  if (FullFit || fmax > Xmax) fmax = Xmax;
+  if (p->FullFit || fmin < p->Xmin) fmin = p->Xmin;
+  if (p->FullFit || fmax > p->Xmax) fmax = p->Xmax;
   
-  AV = 1 - AV;
-  for (i = 0; i < S; i++) if (Set[i].active) if (!Set[i].sorted) {
+  p->AV = 1 - p->AV;
+  for (i = 0; i < p->S; i++) if (p->Set[i].active) if (!p->Set[i].sorted) {
     fprintf(stderr,
 	    "Dataset %d (L = %g) not sorted, can't include into variance.\n",
-	    i, Set[i].L);
+	    i, p->Set[i].L);
   } else {
-    Set_t *s  = &Set[i];
+    Set_t *s  = &p->Set[i];
     double m = 0.0;
     int ja;
     
     for (k = j = ja = 0; k < ASZ; k++) {
-      double x;
-      if (LogX) {
+      struct Var_ *var = &p->Var[p->AV][k];
+      if (p->LogX) {
 	/*x = exp(log(XminXp) + k * (log(Xmax / XminXp)) / ASZ);*/
-	x = fmin * pow(fmax / fmin, (double)k / ASZ);
+	var->x = fmin * pow(fmax / fmin, (double)k / ASZ);
       } else {
-	x = fmin + k * (fmax - fmin) / ASZ;
+	var->x = fmin + k * (fmax - fmin) / ASZ;
       }
-      Var[AV][k].x = x;
-      if (x <  s->Data[0     ].x ||
-	  x >= s->Data[s->N-1].x) {
+      if (var->x <  s->Data[0     ].x ||
+	  var->x >= s->Data[s->N-1].x) {
 	s->Fit[k] = NODATA;
       } else {
-	if (s->Data[j].x <= x && j + 1 < s->N) {
+	if (s->Data[j].x <= var->x && j + 1 < s->N) {
 	  ja = j;
-	  while (s->Data[j].x <= x && j + 1 < s->N) j++;
-	  if (ja == 0 && !FullFit) ja = j - 1; /* ??? */
-	  if (LogX) {
+	  while (s->Data[j].x <= var->x && j + 1 < s->N) j++;
+	  if (ja == 0 && !p->FullFit) ja = j - 1; /* ??? */
+	  if (p->LogX) {
 	    m = log10(s->Data[j].y / s->Data[ja].y)
 	      / log10(s->Data[j].x / s->Data[ja].x);
 	  } else {
@@ -704,11 +672,11 @@ double Valuate(void) {
 	      / (s->Data[j].x - s->Data[ja].x);
 	  }
 	}
-	if (LogX) {
+	if (p->LogX) {
 	  /* exp10(log10(s->Data[ja].y) + m * (log10(x) - log10(s->Data[ja].x))) */
-	  s->Fit[k] = s->Data[ja].y * pow(x / s->Data[ja].x, m);
+	  s->Fit[k] = s->Data[ja].y * pow(var->x / s->Data[ja].x, m);
 	} else {
-	  s->Fit[k] = s->Data[ja].y + (x - s->Data[ja].x) * m;
+	  s->Fit[k] = s->Data[ja].y + (var->x - s->Data[ja].x) * m;
 	}
 	if(!finite(s->Fit[k])) s->Fit[k] = NODATA;
       }
@@ -716,116 +684,106 @@ double Valuate(void) {
   }
   
   for (k = 0; k < ASZ; k++) {
+    struct Var_ *var = &p->Var[p->AV][k];
     int m = 0;
     
-    Var[AV][k].m = 0.0;
-    Var[AV][k].v = 0.0;
+    var->m = 0.0;
+    var->v = 0.0;
     
-    for (i = 0; i < S; i++) if (Set[i].active) {
-      if (Set[i].Fit[k] != NODATA) {
-	Var[AV][k].m +=     Set[i].Fit[k];
-	Var[AV][k].v += SQR(Set[i].Fit[k]);
+    for (i = 0; i < p->S; i++) if (p->Set[i].active) {
+      if (p->Set[i].Fit[k] != NODATA) {
+	var->m +=     p->Set[i].Fit[k];
+	var->v += SQR(p->Set[i].Fit[k]);
 	m++;
       }
-      
-      /*printf("%d %g %g (%g %g)\n", i, Set[i].Fit[k], Var[AV][k].m,
-	Var[AV][k].x, Var[AV][k].v);*/
+      /*printf("%d %g %g (%g %g)\n", i, p->Set[i].Fit[k], p->Var[AV][k].m,
+	p->Var[AV][k].x, p->Var[AV][k].v);*/
     }
     
     if (m <= 1) {
-      Var[AV][k].v = 0.0;
+      var->v = 0.0;
     } else {
-      Var[AV][k].m /= m;
-      Var[AV][k].v /= m;
-      Var[AV][k].v  = Var[AV][k].v - SQR(Var[AV][k].m);
-      Var[AV][k].v /= SQR(Var[AV][k].m); /* Relative variance */
+      var->m /= m;
+      var->v /= m;
+      var->v  = var->v - SQR(var->m);
+      var->v /= SQR(var->m); /* Relative variance */
       
-      var += Var[AV][k].v;
-      nvar++;
+      svar += var->v;
+      nsvar++;
       
-      if (Var[AV][k].v) {
-	varp += log(Var[AV][k].v);
-	nvarp++;
+      if (var->v) {
+	pvar += log(var->v);
+	npvar++;
       }
     }
-    
-    /*Vmin = 0.0;if (Var[AV][k] > 0 && Var[AV][k] < VminYp) VminYp = Var[AV][k];*/
-    
+    /*Vmin = 0.0;if (p->Var[AV][k] > 0 && p->Var[AV][k] < VminYp) VminYp = p->Var[AV][k];*/
 #ifdef DEBUG
-    printf("%g (%g,%g)\n", Var[AV][k].x, Var[AV][k].m, Var[AV][k].v);
+    printf("%g (%g,%g)\n", p->Var[AV][k].x, p->Var[AV][k].m, p->Var[AV][k].v);
 #endif
     {
       double x, y;
-      x = Var[AV][k].x;
-      y = Var[AV][k].v;
+      x = var->x;
+      y = var->v;
       if (finite(x) && finite(y)) {
 	if (y > 0 && y < 1e-8)   y      = 1e-8;
-	if (         y < Vmin)   Vmin   = y;
-	if (x > 0 && y < VminXp) VminXp = y;
-	if (y > 0 && y < VminYp) VminYp = y;
-	if (         y > Vmax)   Vmax   = y;
-	if (x > 0 && y > VmaxXp) VmaxXp = y;
+	if (         y < p->Vmin)   p->Vmin   = y;
+	if (x > 0 && y < p->VminXp) p->VminXp = y;
+	if (y > 0 && y < p->VminYp) p->VminYp = y;
+	if (         y > p->Vmax)   p->Vmax   = y;
+	if (x > 0 && y > p->VmaxXp) p->VmaxXp = y;
       }
     }
   }
   /*printf("var = %g, lvar = %g varp = %g lvarp = %g\n",
     var / ASZ, lvar / ASZ, varp / ASZ, lvarp / ASZ);*/
   
-  switch(VarType) {
-  case 0: if (nvar)  ret = var / nvar; break;
-  case 1: if (nvarp) ret = exp(varp / nvarp); break;
+  switch(p->VarType) {
+  case 0: if (nsvar) ret = svar / nsvar; break;
+  case 1: if (npvar) ret = exp(pvar / npvar); break;
   default:
     fprintf(stderr, "Unknown VarType %d, should not happen\n",
-	    VarType);
+	    p->VarType);
     exit(1);
   }
-  
-  /* if (!finite(ret)) ret = 1e10 + fabs(*Variables[AutoExp]); */
   
   return ret;
 }
 
-const double LevelLen[] = {0.02, 0.01};
-
-void DrawTickX(double x, int level) {
-  double len = LevelLen[level];
-  if (Grid && level == 0) {
-    move2(x, OYmin); draw2(x, OYmax);
-  } else {
-    move2(x, OYmin); draw2(x, OYmin + len * (OYmax - OYmin));
-    move2(x, OYmax); draw2(x, OYmax - len * (OYmax - OYmin));
+void DrawTickX(const NumParams *p, const GraphParams *g, double x, int level) {
+  double len = g->LevelLen[level];
+  if (g->Grid && level == 0) {
+    setlinestyle(1);
+    move2(x, p->OYmin); draw2(x, p->OYmax);
+    setlinestyle(0);
   }
+  move2(x, p->OYmin); draw2(x, p->OYmin + len * (p->OYmax - p->OYmin));
+  move2(x, p->OYmax); draw2(x, p->OYmax - len * (p->OYmax - p->OYmin));
 }
 
-void DrawTickY(double y, int level) {
-  double len = LevelLen[level];
-  if (Grid && level == 0) {
-    move2(OXmin, y); draw2(OXmax, y);
-  } else {
-    move2(OXmin, y); draw2(OXmin + len * (OXmax - OXmin), y);
-    move2(OXmax, y); draw2(OXmax - len * (OXmax - OXmin), y);
+void DrawTickY(const NumParams *p, const GraphParams *g, double y, int level) {
+  double len = g->LevelLen[level];
+  if (g->Grid && level == 0) {
+    setlinestyle(1);
+    move2(p->OXmin, y); draw2(p->OXmax, y);
+    setlinestyle(0);
   }
+  move2(p->OXmin, y); draw2(p->OXmin + len * (p->OXmax - p->OXmin), y);
+  move2(p->OXmax, y); draw2(p->OXmax - len * (p->OXmax - p->OXmin), y);
 }
 
-static int VActive = 0;
-
-int bgndraw(void) {
-  if (!VActive) {
-    linewidth(Lines);
-    Lines ? bgnline() : bgnpoint();
-    VActive = 1;
-    return 1;
-  } else {
+int bgnenddraw(int bgn) {
+  static int active = 0;
+  if(bgn == active) {
     return 0;
-  }
-}
-
-void enddraw(void) {
-  if (VActive) {
-    Lines ? endline() : endpoint();
+  } else if (bgn) {
+    linewidth(Gp->Lines);
+    Gp->Lines ? bgnline() : bgnpoint();
+  } else {
+    Gp->Lines ? endline() : endpoint();
     linewidth(1);
-    VActive = 0;
   }
+  active ^= 1;
+  return 1;
 }
 
 void CalcTicks(struct Ticks_* t, int Log, double d) {
@@ -867,9 +825,9 @@ int charstrC(char *ctext) {
   char *text = strdup(ctext);
   char *s = text;
   int i, n, Cols[4], cx = 0;
-  Cols[0] = FgColor;
+  Cols[0] = Gp->FgColor;
   Cols[1] = ACOLOR;
-  Cols[2] = Colors[2];
+  Cols[2] = Gp->Colors[2];
   Cols[3] = RED;
  n = strlen(text);
   
@@ -889,232 +847,232 @@ int charstrC(char *ctext) {
 void charstrH(char *text, int h) {
   Screencoord cx, cy;
   getcpos(&cx, &cy);
-  cx -= XPos; cy -= YPos;
+  cx -= Gp->XPos; cy -= Gp->YPos;
   cmov2i(cx, cy + h);
   cx += charstrC(text);
   cmov2i(cx, cy);
 }    
 
-void DrawMain(void) {
+void DrawMain(const NumParams *p, GraphParams *g) {
   int ncx, ncy, i;
   char lmlc[80], tmtc[80], mmmc[80], text[256];
   char logtmtc[80], loglmlc[80];
   
-  winset(MainW);
-  color(BgColor);
+  winset(g->MainW);
+  color(g->BgColor);
   clear();
   
-  if (Active) {
-    sprintf(text, "%d", Active);
-    cmov2(XSize - FRAME - strwidth(text), 2 * FontH + FontD);
+  if (g->Active) {
+    sprintf(text, "%d", g->Active);
+    cmov2(g->XSize - FRAME - strwidth(text), 2 * g->FontH + g->FontD);
     color(ACOLOR);
     charstrC(text);
   }
   
-  if (Bewert) {
-    sprintf(text, "V%d = %e", VarType, Error);
-    cmov2(XSize - FRAME - strwidth(text), FontD);
-    color(Colors[2]);
+  if (p->Bewert) {
+    sprintf(text, "V%d = %e", p->VarType, p->Error);
+    cmov2(g->XSize - FRAME - strwidth(text), g->FontD);
+    color(g->Colors[2]);
     charstrC(text);
   }
   
-  color(FgColor);
-  cmov2(FRAME, 2 * FontH + FontD);
+  color(g->FgColor);
+  cmov2(FRAME, 2 * g->FontH + g->FontD);
   
-  Xlab[0] = Ylab[0] = '\0';
+  g->Xlab[0] = g->Ylab[0] = '\0';
   ncx = ncy = 0;
-#define CI(a) ((Active == (a)) + 2 * (AutoExp == (a)))  
-  sprintf(lmlc, Lc || CI(ALc) ? "(%s#%c%+g#0)" : "%s",
-	  Names[0], CI(ALc) + '0', -Lc);
-  sprintf(tmtc, Tc || CI(ATc) ? "(%s#%c%+g#0)" : "%s",
-	  Names[1], CI(ATc) + '0', -Tc);
-  sprintf(mmmc, Mc || CI(AMc) ? "(%s#%c%+g#0)" : "%s",
-	  Names[2], CI(AMc) + '0', -Mc);
+#define CI(a) ((g->Active == (a)) + 2 * (p->AutoExp == (a)))  
+  sprintf(lmlc, p->Lc || CI(ALc) ? "(%s#%c%+g#0)" : "%s",
+	  g->Names[0], CI(ALc) + '0', -p->Lc);
+  sprintf(tmtc, p->Tc || CI(ATc) ? "(%s#%c%+g#0)" : "%s",
+	  g->Names[1], CI(ATc) + '0', -p->Tc);
+  sprintf(mmmc, p->Mc || CI(AMc) ? "(%s#%c%+g#0)" : "%s",
+	  g->Names[2], CI(AMc) + '0', -p->Mc);
   
-  sprintf(logtmtc, "log%s%s%s", Tc ? "" : "(", tmtc, Tc ? "" : ")");
-  sprintf(loglmlc, "log%s%s%s", Lc ? "" : "(", lmlc, Lc ? "" : ")");
+  sprintf(logtmtc, "log%s%s%s", p->Tc ? "" : "(", tmtc, p->Tc ? "" : ")");
+  sprintf(loglmlc, "log%s%s%s", p->Lc ? "" : "(", lmlc, p->Lc ? "" : ")");
   
-  sprintf(text, "d = %g; X = #%c%s#0%s", Delta, CI(AXF) + '0',
-	  XFak < 0.0 ? "-" : CI(AXF) ? "+" : "", tmtc);
+  sprintf(text, "d = %g; X = #%c%s#0%s", p->Delta, CI(AXF) + '0',
+	  p->XFak < 0.0 ? "-" : CI(AXF) ? "+" : "", tmtc);
   /* (T - Tc) */
   charstrC(text);
-  ncx += sprintf(Xlab + ncx, "%s%s", XFak == 1.0 ? "" : "-", tmtc);
+  ncx += sprintf(g->Xlab + ncx, "%s%s", p->XFak == 1.0 ? "" : "-", tmtc);
   
   /* ^z */
-  if (ExpZ != 1.0 || CI(AZ)) {
-    sprintf(text, "#%c%g#0", CI(AZ) + '0', ExpZ);
-    charstrH(text, FontH/2);
-    ncx += sprintf(Xlab + ncx, "\\S%g\\N", ExpZ);
+  if (p->ExpZ != 1.0 || CI(AZ)) {
+    sprintf(text, "#%c%g#0", CI(AZ) + '0', p->ExpZ);
+    charstrH(text, g->FontH/2);
+    ncx += sprintf(g->Xlab + ncx, "\\S%g\\N", p->ExpZ);
   }
   
   /* * log(T - Tc) */
-  if (ExpLz || CI(ALz)) {
+  if (p->ExpLz || CI(ALz)) {
     sprintf(text, " * %s", logtmtc);
     charstrC(text);
-    ncy += sprintf(Ylab + ncy, " * \\%s", logtmtc);
+    ncy += sprintf(g->Ylab + ncy, " * \\%s", logtmtc);
     
     /* ^ExpLz */
-    if (ExpLz != 1.0 || CI(ALz)) {
-      sprintf(text, "#%c%g#0", CI(ALz) + '0', ExpLz);
-      charstrH(text, FontH/2);
-      ncy += sprintf(Ylab + ncy, "\\S%g\\N", ExpLz);
+    if (p->ExpLz != 1.0 || CI(ALz)) {
+      sprintf(text, "#%c%g#0", CI(ALz) + '0', p->ExpLz);
+      charstrH(text, g->FontH/2);
+      ncy += sprintf(g->Ylab + ncy, "\\S%g\\N", p->ExpLz);
     }
   }
   
   /* * (L - Lc) */
-  if (ExpX || ExpDx || CI(ALc) || CI(AX) || CI(ADx)) {
+  if (p->ExpX || p->ExpDx || CI(ALc) || CI(AX) || CI(ADx)) {
     charstrC(" * ");
     charstrC(lmlc);
-    ncx += sprintf(Xlab + ncx, " * %s", lmlc);
+    ncx += sprintf(g->Xlab + ncx, " * %s", lmlc);
     
     /* ^(x + Dy D) */
-    switch(2 * (ExpX || CI(AX) || CI(ALc)) + (ExpDx || CI(ADx))) {
+    switch(2 * (p->ExpX || CI(AX) || CI(ALc)) + (p->ExpDx || CI(ADx))) {
     case 3: /* Both */
       sprintf(text, "(#%c%g#%c%+g#0*%s)",
-	      CI(AX ) + '0', ExpX,
-	      CI(ADx) + '0', ExpDx,
-	      Names[3]);
-      charstrH(text, FontH/2);
-      ncx += sprintf(Xlab + ncx, "\\S%g%+g %s\\N", ExpX, ExpDx, Names[3]);
+	      CI(AX ) + '0', p->ExpX,
+	      CI(ADx) + '0', p->ExpDx,
+	      g->Names[3]);
+      charstrH(text, g->FontH/2);
+      ncx += sprintf(g->Xlab + ncx, "\\S%g%+g %s\\N", p->ExpX, p->ExpDx, g->Names[3]);
       break;
     case 2: /* X */
-      if (ExpX != 1.0 || CI(AX)) {
-	sprintf(text, "#%c%g#0", CI(AX) + '0', ExpX);
-	charstrH(text, FontH/2);
-	ncx += sprintf(Xlab + ncx, "\\S%g\\N", ExpX);
+      if (p->ExpX != 1.0 || CI(AX)) {
+	sprintf(text, "#%c%g#0", CI(AX) + '0', p->ExpX);
+	charstrH(text, g->FontH/2);
+	ncx += sprintf(g->Xlab + ncx, "\\S%g\\N", p->ExpX);
       }
       break;
     case 1: /* Dx */
-      sprintf(text, "#%c%g#0*%s", CI(ADx) + '0', ExpDx, Names[3]);
-      charstrH(text, FontH/2);
-      ncx += sprintf(Xlab + ncx, "\\S%g %s\\N", ExpDx, Names[3]);
+      sprintf(text, "#%c%g#0*%s", CI(ADx) + '0', p->ExpDx, g->Names[3]);
+      charstrH(text, g->FontH/2);
+      ncx += sprintf(g->Xlab + ncx, "\\S%g %s\\N", p->ExpDx, g->Names[3]);
       break;
     }
   }
   
   /* * log(L - Lc) */
-  if (ExpLx || CI(ALx)) {
+  if (p->ExpLx || CI(ALx)) {
     sprintf(text, " * %s", loglmlc);
     charstrC(text);
-    ncx += sprintf(Xlab + ncx, " * \\%s", loglmlc);
+    ncx += sprintf(g->Xlab + ncx, " * \\%s", loglmlc);
     
     /* ^ExpLx */
-    if (ExpLx != 1.0 || CI(ALx)) {
-      sprintf(text, "#%c%g#0", CI(ALx) + '0', ExpLx);
-      charstrH(text, FontH/2);
-      ncx += sprintf(Xlab + ncx, "\\S%g\\N", ExpLx);
+    if (p->ExpLx != 1.0 || CI(ALx)) {
+      sprintf(text, "#%c%g#0", CI(ALx) + '0', p->ExpLx);
+      charstrH(text, g->FontH/2);
+      ncx += sprintf(g->Xlab + ncx, "\\S%g\\N", p->ExpLx);
     }
   }
   
   sprintf(text, "; Y = #%c%s#0%s", CI(AYF) + '0',
-	  YFak < 0.0 ? "-" : CI(AYF) ? "+" : "", mmmc);
+	  p->YFak < 0.0 ? "-" : CI(AYF) ? "+" : "", mmmc);
   /* (M - Mc) */
   charstrC(text);
   
-  ncy += sprintf(Ylab + ncy, "%s%s", YFak == 1.0 ? "" : "-", mmmc);
+  ncy += sprintf(g->Ylab + ncy, "%s%s", p->YFak == 1.0 ? "" : "-", mmmc);
   
   /* ^(u + Du D) */
-  switch(2 * (ExpU || CI(AU) || CI(AMc)) + (ExpDu || CI(ADu))) {
+  switch(2 * (p->ExpU || CI(AU) || CI(AMc)) + (p->ExpDu || CI(ADu))) {
   case 3: /* Both */
     sprintf(text, "(#%c%g#%c%+g#0*%s)",
-	    CI(AU ) + '0', ExpU,
-	    CI(ADu) + '0', ExpDu,
-	    Names[3]);
-    charstrH(text, FontH/2);
-    ncy += sprintf(Ylab + ncy, "\\S%g%+g %s\\N", ExpU, ExpDu, Names[3]);
+	    CI(AU ) + '0', p->ExpU,
+	    CI(ADu) + '0', p->ExpDu,
+	    g->Names[3]);
+    charstrH(text, g->FontH/2);
+    ncy += sprintf(g->Ylab + ncy, "\\S%g%+g %s\\N", p->ExpU, p->ExpDu, g->Names[3]);
     break;
   case 2: /* U */
-    if (ExpU != 1.0 || CI(AU)) {
-      sprintf(text, "#%c%g#0", CI(AU) + '0', ExpU);
-      charstrH(text, FontH/2);
-      ncy += sprintf(Ylab + ncy, "\\S%g\\N", ExpU);
+    if (p->ExpU != 1.0 || CI(AU)) {
+      sprintf(text, "#%c%g#0", CI(AU) + '0', p->ExpU);
+      charstrH(text, g->FontH/2);
+      ncy += sprintf(g->Ylab + ncy, "\\S%g\\N", p->ExpU);
     }
     break;
   case 1: /* Du */
-    sprintf(text, "#%c%g#0*%s", CI(ADu) + '0', ExpDu, Names[3]);
-    charstrH(text, FontH/2);
-    ncy += sprintf(Ylab + ncy, "\\S%g %s\\N", ExpDu, Names[3]);
+    sprintf(text, "#%c%g#0*%s", CI(ADu) + '0', p->ExpDu, g->Names[3]);
+    charstrH(text, g->FontH/2);
+    ncy += sprintf(g->Ylab + ncy, "\\S%g %s\\N", p->ExpDu, g->Names[3]);
     break;
   }
   /* * (L - Lc) */
-  if (ExpY || ExpDy || CI(AY) || CI(ADy)) {
+  if (p->ExpY || p->ExpDy || CI(AY) || CI(ADy)) {
     charstrC(" * ");
     charstrC(lmlc);
-    ncy += sprintf(Ylab + ncy, " * %s", lmlc);
+    ncy += sprintf(g->Ylab + ncy, " * %s", lmlc);
     
     /* ^(y + Dy D) */
-    switch(2 * (ExpY || CI(AY)) + (ExpDy || CI(ADy))) {
+    switch(2 * (p->ExpY || CI(AY)) + (p->ExpDy || CI(ADy))) {
     case 3: /* Both */
       sprintf(text, "(#%c%g#%c%+g#0*%s)",
-	      CI(AY ) + '0', ExpY,
-	      CI(ADy) + '0', ExpDy,
-	      Names[3]);
-      charstrH(text, FontH/2);
-      ncy += sprintf(Ylab + ncy, "\\S%g%+g %s\\N", ExpY, ExpDy, Names[3]);
+	      CI(AY ) + '0', p->ExpY,
+	      CI(ADy) + '0', p->ExpDy,
+	      g->Names[3]);
+      charstrH(text, g->FontH/2);
+      ncy += sprintf(g->Ylab + ncy, "\\S%g%+g %s\\N", p->ExpY, p->ExpDy, g->Names[3]);
       break;
     case 2: /* Y */
-      if (ExpY != 1.0 || CI(AY)) {
-	sprintf(text, "#%c%g#0", CI(AY) + '0', ExpY);
-	charstrH(text, FontH/2);
-	ncy += sprintf(Ylab + ncy, "\\S%g\\N", ExpY);
+      if (p->ExpY != 1.0 || CI(AY)) {
+	sprintf(text, "#%c%g#0", CI(AY) + '0', p->ExpY);
+	charstrH(text, g->FontH/2);
+	ncy += sprintf(g->Ylab + ncy, "\\S%g\\N", p->ExpY);
       }
       break;
     case 1: /* Dy */
-      sprintf(text, "#%c%g#0*%s", CI(ADy) + '0', ExpDy, Names[3]);
-      charstrH(text, FontH/2);
-      ncy += sprintf(Ylab + ncy, "\\S%g %s\\N", ExpDy, Names[3]);
+      sprintf(text, "#%c%g#0*%s", CI(ADy) + '0', p->ExpDy, g->Names[3]);
+      charstrH(text, g->FontH/2);
+      ncy += sprintf(g->Ylab + ncy, "\\S%g %s\\N", p->ExpDy, g->Names[3]);
       break;
     }
   }
   
   /* * log(L - Lc) */
-  if (ExpLy || CI(ALy)) {
+  if (p->ExpLy || CI(ALy)) {
     sprintf(text, " * %s", loglmlc);
     charstrC(text);
-    ncy += sprintf(Ylab + ncy, " * \\%s", loglmlc);
+    ncy += sprintf(g->Ylab + ncy, " * \\%s", loglmlc);
     
     /* ^ExpLy */
-    if (ExpLy != 1.0 || CI(ALy)) {
-      sprintf(text, "#%c%g#0", CI(ALy) + '0', ExpLy);
-      charstrH(text, FontH/2);
-      ncy += sprintf(Ylab + ncy, "\\S%g\\N", ExpLy);
+    if (p->ExpLy != 1.0 || CI(ALy)) {
+      sprintf(text, "#%c%g#0", CI(ALy) + '0', p->ExpLy);
+      charstrH(text, g->FontH/2);
+      ncy += sprintf(g->Ylab + ncy, "\\S%g\\N", p->ExpLy);
     }
   }
   
   /* * (T - Tc) */
-  if (ExpM || CI(AM)) {
+  if (p->ExpM || CI(AM)) {
     charstrC(" * ");
     charstrC(tmtc);
-    ncy += sprintf(Ylab + ncy, " * %s", tmtc);
+    ncy += sprintf(g->Ylab + ncy, " * %s", tmtc);
     
     /* ^m */
-    if (ExpM != 1.0 || CI(AM)) {
-      sprintf(text, "#%c%g#0", CI(AM) + '0', ExpM);
-      charstrH(text, FontH/2);
-      ncy += sprintf(Ylab + ncy, "\\S%g\\N", ExpM);
+    if (p->ExpM != 1.0 || CI(AM)) {
+      sprintf(text, "#%c%g#0", CI(AM) + '0', p->ExpM);
+      charstrH(text, g->FontH/2);
+      ncy += sprintf(g->Ylab + ncy, "\\S%g\\N", p->ExpM);
     }
   }
   
   /* * log(T - Tc) */
-  if (ExpLm || CI(ALm)) {
+  if (p->ExpLm || CI(ALm)) {
     sprintf(text, " * %s", logtmtc);
     charstrC(text);
-    ncy += sprintf(Ylab + ncy, " * \\%s", logtmtc);
+    ncy += sprintf(g->Ylab + ncy, " * \\%s", logtmtc);
     
     /* ^ExpLm */
-    if (ExpLm != 1.0 || CI(ALm)) {
-      sprintf(text, "#%c%g#0", CI(ALm) + '0', ExpLm);
-      charstrH(text, FontH/2);
-      ncy += sprintf(Ylab + ncy, "\\S%g\\N", ExpLm);
+    if (p->ExpLm != 1.0 || CI(ALm)) {
+      sprintf(text, "#%c%g#0", CI(ALm) + '0', p->ExpLm);
+      charstrH(text, g->FontH/2);
+      ncy += sprintf(g->Ylab + ncy, "\\S%g\\N", p->ExpLm);
     }
   }
   
-  cmov2(FRAME, FontH + FontD);
-  sprintf(text, "%s =", Names[0]);
+  cmov2(FRAME, g->FontH + g->FontD);
+  sprintf(text, "%s =", g->Names[0]);
   charstr(text);
   
-  for (i = 0; i < S; i++) {
-    Set_t *s  = &Set[i];
+  for (i = 0; i < p->S; i++) {
+    Set_t *s  = &p->Set[i];
     color(s->color);
     sprintf(text, s->active ? " %.4g" : " (%.4g)", s->L);
     charstr(text);
@@ -1123,201 +1081,200 @@ void DrawMain(void) {
   sleep(0);
 }
 
-void checked_v2d(double x0, double x1, double dm[2][2]) {
-  if ((LogX && (x0 <= 0.0)) ||
-      (LogY && (x1 <= 0.0))) {
+void checked_v2d(const NumParams *p, double x0, double x1, double dm[2][2]) {
+  if ((p->LogX && (x0 <= 0.0)) ||
+      (p->LogY && (x1 <= 0.0))) {
     /* Point is not a number, don't draw */
-    enddraw();
+    bgnenddraw(0);
   } else {
     double x[2];
-    x[0] = LogX ? log10(x0) : x0;
-    x[1] = LogY ? log10(x1) : x1;
+    x[0] = p->LogX ? log10(x0) : x0;
+    x[1] = p->LogY ? log10(x1) : x1;
     if (x[0] < dm[0][0] || x[0] > dm[0][1] ||
 	x[1] < dm[1][0] || x[1] > dm[1][1]) {
       /* Point is too far away, don't draw */
-      enddraw();
+      bgnenddraw(0);
     } else {
       /* All OK */
-      if (bgndraw()) v2d(x); /* Draw at least one point */
+      if (bgnenddraw(1)) v2d(x); /* Draw at least one point */
       v2d(x);
     }
   }
 }
 
-void DrawPlot(void) {
+void AutoScale(NumParams *p) {
+  double dx, dy;
+  p->OXmin = p->LogX ? log10(p->XminXp) : p->LogY ? p->XminYp : p->Xmin;
+  p->OYmin = p->LogY ? log10(p->YminYp) : p->LogX ? p->YminXp : p->Ymin;
+  p->OXmax = p->LogY ? p->XmaxYp : p->Xmax; if (p->LogX) p->OXmax = log10(p->OXmax);
+  p->OYmax = p->LogX ? p->YmaxXp : p->Ymax; if (p->LogY) p->OYmax = log10(p->OYmax);
+  
+  if (Gp->ShowVar) {
+    p->OYmin = p->LogY ? log10(p->VminYp) : p->LogX ? p->VminXp : p->Vmin;
+    p->OYmax = p->LogX ? p->VmaxXp : p->Vmax; if (p->LogY) p->OYmax = log10(p->OYmax);
+  }
+  
+  dx = p->OXmax - p->OXmin;
+  dy = p->OYmax - p->OYmin;
+  p->OXmin -= 0.05 * dx;
+  p->OXmax += 0.05 * dx;
+  p->OYmin -= 0.05 * dy;
+  p->OYmax += 0.05 * dy;
+
+#if 0
+  fprintf(stderr, "OXY: %g %g %g %g\n", OXmin, OXmax, OYmin, OYmax);
+#endif
+}
+
+void DrawPlot(NumParams *p) {
   int i, j, k;
   char text[256];
   double x, y;
   double dm[2][2];
   
-  winset(PlotW);
+  winset(Gp->PlotW);
+  ortho2(p->OXmin, p->OXmax, p->OYmin, p->OYmax);
   
-  if (AutoScale) {
-    double dx, dy;
-    OXmin = LogX ? log10(XminXp) : LogY ? XminYp : Xmin;
-    OYmin = LogY ? log10(YminYp) : LogX ? YminXp : Ymin;
-    OXmax = LogY ? XmaxYp : Xmax; if (LogX) OXmax = log10(OXmax);
-    OYmax = LogX ? YmaxXp : Ymax; if (LogY) OYmax = log10(OYmax);
-    
-    if (ShowVar) {
-      OYmin = LogY ? log10(VminYp) : LogX ? VminXp : Vmin;
-      OYmax = LogX ? VmaxXp : Vmax; if (LogY) OYmax = log10(OYmax);
-    }
-    
-    dx = OXmax - OXmin;
-    dy = OYmax - OYmin;
-    OXmin -= 0.05 * dx;
-    OXmax += 0.05 * dx;
-    OYmin -= 0.05 * dy;
-    OYmax += 0.05 * dy;
-  }
+  dm[0][0] = p->OXmin - 10 * (p->OXmax - p->OXmin);
+  dm[0][1] = p->OXmax + 10 * (p->OXmax - p->OXmin);
+  dm[1][0] = p->OYmin - 10 * (p->OYmax - p->OYmin);
+  dm[1][1] = p->OYmax + 10 * (p->OYmax - p->OYmin);
   
-#if 0
-  fprintf(stderr, "OXY: %g %g %g %g\n", OXmin, OXmax, OYmin, OYmax);
-#endif
-  
-  ortho2(OXmin, OXmax, OYmin, OYmax);
-  
-  dm[0][0] = OXmin - 10 * (OXmax - OXmin);
-  dm[0][1] = OXmax + 10 * (OXmax - OXmin);
-  dm[1][0] = OYmin - 10 * (OYmax - OYmin);
-  dm[1][1] = OYmax + 10 * (OYmax - OYmin);
-  
-  color(BgColor);
+  color(Gp->BgColor);
   clear();
   color(GRAY);
-  rect(OXmin, OYmin, OXmax, OYmax);
+  rect(p->OXmin, p->OYmin, p->OXmax, p->OYmax);
   
-  CalcTicks(&Ticks[0], LogX, OXmax - OXmin);
-  CalcTicks(&Ticks[1], LogY, OYmax - OYmin);
+  CalcTicks(&p->Ticks[0], p->LogX, p->OXmax - p->OXmin);
+  CalcTicks(&p->Ticks[1], p->LogY, p->OYmax - p->OYmin);
   
-  for (x = Ticks[0].t0 * floor(OXmin / Ticks[0].t0);
-       x < OXmax;
-       x = Ticks[0].l0
-	 ? log10(exp10(x) + Ticks[0].t0)
-	 : x + Ticks[0].t0) { 
+  for (x = p->Ticks[0].t0 * floor(p->OXmin / p->Ticks[0].t0);
+       x < p->OXmax;
+       x = p->Ticks[0].l0
+	 ? log10(exp10(x) + p->Ticks[0].t0)
+	 : x + p->Ticks[0].t0) { 
     double xx;
-    if (fabs(x / Ticks[0].t0) < 1e-10) x = 0.0;
+    if (fabs(x / p->Ticks[0].t0) < 1e-10) x = 0.0;
     color(GRAY);
-    for (xx = x; xx < x + Ticks[0].t0; 
-	 xx = Ticks[0].l1 ? log10(exp10(xx) + exp10(x)) : xx + Ticks[0].t1) { 
-      DrawTickX(xx, 1);
+    for (xx = x; xx < x + p->Ticks[0].t0; 
+	 xx = p->Ticks[0].l1 ? log10(exp10(xx) + exp10(x)) : xx + p->Ticks[0].t1) { 
+      DrawTickX(p, Gp, xx, 1);
     }
     color(GRAY);
-    DrawTickX(x, 0);
-    if (!LogX/* == Ticks[0].l0*/) {
+    DrawTickX(p, Gp, x, 0);
+    if (!p->LogX/* == p->Ticks[0].l0*/) {
       sprintf(text, "%g", x);
     } else {
       sprintf(text, "%.3g", exp10(x));
     }
     /*fprintf(stderr, "%s (%g)\n", text, x);*/
-    color(FgColor);
-    cmov2(x, OYmin); charstr(text);
+    color(Gp->FgColor);
+    cmov2(x, p->OYmin); charstr(text);
   }
   
-  for (y = Ticks[1].t0 * floor(OYmin / Ticks[1].t0);
-       y < OYmax;
-       y = Ticks[1].l0
-	 ? log10(exp10(y) + Ticks[1].t0)
-	 : y + Ticks[1].t0) {
+  for (y = p->Ticks[1].t0 * floor(p->OYmin / p->Ticks[1].t0);
+       y < p->OYmax;
+       y = p->Ticks[1].l0
+	 ? log10(exp10(y) + p->Ticks[1].t0)
+	 : y + p->Ticks[1].t0) {
     double yy;
-    if (fabs(y / Ticks[1].t0) < 1e-10) y = 0.0;
+    if (fabs(y / p->Ticks[1].t0) < 1e-10) y = 0.0;
     color(GRAY);
-    for (yy = y; yy < y + Ticks[1].t0;
-	 yy = Ticks[1].l1 ? log10(exp10(yy) + exp10(y)) : yy + Ticks[1].t1) { 
-      DrawTickY(yy, 1);
+    for (yy = y; yy < y + p->Ticks[1].t0;
+	 yy = p->Ticks[1].l1 ? log10(exp10(yy) + exp10(y)) : yy + p->Ticks[1].t1) { 
+      DrawTickY(p, Gp, yy, 1);
     }
     color(GRAY);
-    DrawTickY(y, 0);
-    if (LogY == Ticks[1].l0) {
+    DrawTickY(p, Gp, y, 0);
+    if (p->LogY == p->Ticks[1].l0) {
       sprintf(text, "%g", y);
     } else {
       sprintf(text, "%.3g", exp10(y));
     }
     /*fprintf(stderr, "%s (%g)\n", text, y);*/
-    color(FgColor);
-    cmov2(OXmin, y); charstr(text);
+    color(Gp->FgColor);
+    cmov2(p->OXmin, y); charstr(text);
   }
   
-  if (!FullFit) {
+  if (!p->FullFit) {
     double fmin, fmax;
     color(RED);
-    setlinestyle(1);
-    fmin = OXmin + OFmin * (OXmax - OXmin);
-    fmax = OXmin + OFmax * (OXmax - OXmin);
-    move2(fmin, OYmin); draw2(fmin, OYmax);
-    move2(fmax, OYmin); draw2(fmax, OYmax);
+    setlinestyle(2);
+    fmin = p->OXmin + p->OFmin * (p->OXmax - p->OXmin);
+    fmax = p->OXmin + p->OFmax * (p->OXmax - p->OXmin);
+    move2(fmin, p->OYmin); draw2(fmin, p->OYmax);
+    move2(fmax, p->OYmin); draw2(fmax, p->OYmax);
     setlinestyle(0);
   }
   
-  for (i = 0; i < S; i++) if (Set[i].active) {
-    Set_t *s  = &Set[i];
+  for (i = 0; i < p->S; i++) if (p->Set[i].active) {
+    Set_t *s  = &p->Set[i];
     
     color(s->color);
     
     for (j = 0; j < s->N; j++) {
       Data_t *d = &s->Data[j];
-      checked_v2d(d->x, d->y, dm);
+      checked_v2d(p, d->x, d->y, dm);
     }
-    enddraw();
+    bgnenddraw(0);
 #ifdef SHOWFIT
     for (k = 0; k < ASZ; k++) {
-      checked_v2d(Var[AV][k].x, Set[i].Fit[k], dm);
+      checked_v2d(p, p->Var[AV][k].x, p->Set[i].Fit[k], dm);
     }
-    enddraw();
+    bgnenddraw(0);
 #endif
   }
   
-  if (ShowVar) {
+  if (Gp->ShowVar) {
     int av;
     
     /* Draw mean */
     color(RED);
     for (k = 0; k < ASZ; k++) {
-      checked_v2d(Var[AV][k].x, Var[AV][k].m, dm);
+      checked_v2d(p, p->Var[p->AV][k].x, p->Var[p->AV][k].m, dm);
     }
-    enddraw();
+    bgnenddraw(0);
     
     /* Draw old and new variance */
-    for (i = 0, av = 1 - AV; i < 2; i++) {
-      if (AutoExp) { /* don't draw old with AutoExp running */
+    for (i = 0, av = 1 - p->AV; i < 2; i++) {
+      if (p->AutoExp) { /* don't draw old with AutoExp running */
 	i++;
-	av = AV;
+	av = p->AV;
       }
       color(i == 0 ? GRAY : RED);
       for (k = 0; k < ASZ; k++) {
-	checked_v2d(Var[av][k].x, Var[av][k].v, dm);
+	checked_v2d(p, p->Var[av][k].x, p->Var[av][k].v, dm);
       }
-      enddraw();
+      bgnenddraw(0);
       av = 1 - av;
     }
   }
   swapbuffers();
 }
 
-void ShowPos(Int16 mx, Int16 my, Int16 showpos) {
+void ShowPos(const NumParams *p, const GraphParams *g, Int16 mx, Int16 my, Int16 showpos) {
   static char text[] = "                              ";
   double x, y;
   
-  winset(MainW);
-  color(BgColor);
-  cmov2(FRAME, FontD);
+  winset(g->MainW);
+  color(g->BgColor);
+  cmov2(FRAME, g->FontD);
   charstr(text);
   if (showpos) {
-    x = OXmin + (OXmax - OXmin) * (double)(mx - PXPos) / PXSize;
-    y = OYmin + (OYmax - OYmin) * (double)(my - PYPos) / PYSize;
+    x = p->OXmin + (p->OXmax - p->OXmin) * (double)(mx - g->PXPos) / g->PXSize;
+    y = p->OYmin + (p->OYmax - p->OYmin) * (double)(my - g->PYPos) / g->PYSize;
 #ifdef DEBUG
     printf("(%g %g %g %g) %d %d %d %d -> (%g %g)\n",
-	   OXmin, OXmax, OYmin, OYmax, 
-	   PXPos, PYPos,
-	   mx - PXPos, my - PYPos,
+	   p->OXmin, p->OXmax, p->OYmin, p->OYmax, 
+	   g->PXPos, g->PYPos,
+	   mx - g->PXPos, my - g->PYPos,
 	   x, y);
 #endif
-    color(FgColor);
+    color(g->FgColor);
     sprintf(text, "P = {%g, %g}", 
-	    LogX ? exp10(x) : x,
-	    LogY ? exp10(y) : y);
-    cmov2(FRAME, FontD);
+	    p->LogX ? exp10(x) : x,
+	    p->LogY ? exp10(y) : y);
+    cmov2(FRAME, g->FontD);
     charstr(text);
   }
 }
@@ -1398,7 +1355,7 @@ int Selector(double*xmin, double*xmax, double*ymin, double*ymax, int col) {
   return 1;
 }
 
-void ProcessQueue(void) {
+void ProcessQueue(NumParams *p, GraphParams *g) {
   Int32 dev = 4711;
   Int16 val;
   enum RecalcNames {
@@ -1407,7 +1364,10 @@ void ProcessQueue(void) {
   int todo = ReNone;
   static Int16 mx = 0, my = 0, showpos = 1;
   static int fitfak = 0;
+  static int rewrite = 1;
+  static int activei = 0;
   double fak = 0.0;
+  double *Variables = &p->Vardummy;
   
   if (fitfak == 0 || qtest())
     dev = qread(&val);
@@ -1420,15 +1380,9 @@ void ProcessQueue(void) {
     /* Don't misinterpret PAD keys as Number keys */
     Int32 dev2 = qtest();
     switch(dev2) {
-    case PAD1:
-    case PAD2:
-    case PAD3:
-    case PAD4:
-    case PAD5:
-    case PAD6:
-    case PAD7:
-    case PAD8:
-    case PAD9:
+    case PAD1: case PAD2: case PAD3:
+    case PAD4: case PAD5: case PAD6:
+    case PAD7: case PAD8: case PAD9:
       dev = qread(&val);
       break;
     }
@@ -1436,8 +1390,8 @@ void ProcessQueue(void) {
   
   switch(dev) {
   case INPUTCHANGE:
-    if (val == 0) write_both(0);
-    showpos = val == PlotW;
+    if (val == 0) rewrite = write_both(0, rewrite);
+    showpos = val == g->PlotW;
     goto show;
   case MOUSEX:
     mx = val;
@@ -1446,48 +1400,54 @@ void ProcessQueue(void) {
   case MOUSEY:
     my = val;
   show:
-    ShowPos(mx, my, showpos);
+    ShowPos(p, g, mx, my, showpos);
     break;
   case LEFTSHIFTKEY:
   case RIGHTSHIFTKEY:
-    ShiftKey = val;
+    g->ShiftKey = val;
     break;
   }
   
   /* For all others, ignore val == 0 (key/buttonrelease) */
   if (val) switch (dev) {
   case LEFTMOUSE:
-    winset(PlotW);
-    switch (ShiftKey) {
+    winset(g->PlotW);
+    switch (g->ShiftKey) {
       double fmin, fmax;
     case 0:
-      fmin = OXmin + OFmin * (OXmax - OXmin);
-      fmax = OXmin + OFmax * (OXmax - OXmin);
-      if (Selector(&OXmin, &OXmax, &OYmin, &OYmax, GREEN)) {
-	OFmin = (fmin - OXmin) / (OXmax - OXmin);
-	OFmax = (fmax - OXmin) / (OXmax - OXmin);
-	AutoScale = 0;
+      fmin = p->OXmin + p->OFmin * (p->OXmax - p->OXmin);
+      fmax = p->OXmin + p->OFmax * (p->OXmax - p->OXmin);
+      if (Selector(&p->OXmin, &p->OXmax, &p->OYmin, &p->OYmax, GREEN)) {
+	p->OFmin = (fmin - p->OXmin) / (p->OXmax - p->OXmin);
+	p->OFmax = (fmax - p->OXmin) / (p->OXmax - p->OXmin);
+	g->AutoScale = 0;
 	todo = ReWr;
       }
       break;
     case 1:
       if (Selector(&fmin, &fmax, NULL, NULL, YELLOW)) {
-	  OFmin = (fmin - OXmin) / (OXmax - OXmin);
-	  OFmax = (fmax - OXmin) / (OXmax - OXmin);
-	  FullFit = 0;
+	  p->OFmin = (fmin - p->OXmin) / (p->OXmax - p->OXmin);
+	  p->OFmax = (fmax - p->OXmin) / (p->OXmax - p->OXmin);
+	  p->FullFit = 0;
 	  todo = ReCa;
       }
       break;
     }
     break;
   case MIDDLEMOUSE:
-    switch (ShiftKey) {
+    switch (g->ShiftKey) {
+      double fmin, fmax;
     case 0:
-      AutoScale = 1;
+      fmin = p->OXmin + p->OFmin * (p->OXmax - p->OXmin);
+      fmax = p->OXmin + p->OFmax * (p->OXmax - p->OXmin);
+      AutoScale(p);
+      p->OFmin = (fmin - p->OXmin) / (p->OXmax - p->OXmin);
+      p->OFmax = (fmax - p->OXmin) / (p->OXmax - p->OXmin);
+      g->AutoScale = 1;
       todo = ReWr;
       break;
     case 1:
-      FullFit = 1;
+      p->FullFit = 1;
       todo = ReCa;
       break;
     }
@@ -1495,38 +1455,38 @@ void ProcessQueue(void) {
   case RIGHTMOUSE:
     {
       double xc, yc, xd, yd, fmin, fmax;
-      xc   = (OXmax + OXmin) / 2;
-      yc   = (OYmax + OYmin) / 2;
-      xd   = OXmax - OXmin;
-      yd   = OYmax - OYmin;
-      fmin = OXmin + OFmin * (OXmax - OXmin);
-      fmax = OXmin + OFmax * (OXmax - OXmin);
+      xc   = (p->OXmax + p->OXmin) / 2;
+      yc   = (p->OYmax + p->OYmin) / 2;
+      xd   = p->OXmax - p->OXmin;
+      yd   = p->OYmax - p->OYmin;
+      fmin = p->OXmin + p->OFmin * (p->OXmax - p->OXmin);
+      fmax = p->OXmin + p->OFmax * (p->OXmax - p->OXmin);
 #define ZOOMOUT 0.6
-      OXmin = xc - ZOOMOUT * xd;
-      OXmax = xc + ZOOMOUT * xd;
-      OYmin = yc - ZOOMOUT * yd;
-      OYmax = yc + ZOOMOUT * yd;
-      OFmin = (fmin - OXmin) / (OXmax - OXmin);
-      OFmax = (fmax - OXmin) / (OXmax - OXmin);
-      AutoScale = 0;
+      p->OXmin = xc - ZOOMOUT * xd;
+      p->OXmax = xc + ZOOMOUT * xd;
+      p->OYmin = yc - ZOOMOUT * yd;
+      p->OYmax = yc + ZOOMOUT * yd;
+      p->OFmin = (fmin - p->OXmin) / (p->OXmax - p->OXmin);
+      p->OFmax = (fmax - p->OXmin) / (p->OXmax - p->OXmin);
+      g->AutoScale = 0;
       todo = ReWr;
     }
     break;
   case REDRAW:
     /* Ignore REDRAW if one for other window is pending */
     if (qtest() == REDRAW) break;
-    winset(MainW);
+    winset(g->MainW);
     reshapeviewport();
-    getsize(&XSize, &YSize); 	/* Size of main window */
-    getorigin(&XPos, &YPos); 	/* Origin of main window */
-    ortho2(0.0, XSize - 1.0, 0.0, YSize - 1.0);
+    getsize(&g->XSize, &g->YSize); 	/* Size of main window */
+    getorigin(&g->XPos, &g->YPos); 	/* Origin of main window */
+    ortho2(0.0, g->XSize - 1.0, 0.0, g->YSize - 1.0);
     
-    winset(PlotW);
-    winposition(FRAME, XSize - FRAME - 1,
-		Swh,   YSize - FRAME - 1);
+    winset(g->PlotW);
+    winposition(FRAME,  g->XSize - FRAME - 1,
+		g->Swh, g->YSize - FRAME - 1);
     reshapeviewport();
-    getsize(&PXSize, &PYSize); 	/* Size of plot window */
-    getorigin(&PXPos, &PYPos); 	/* Origin of plot window */
+    getsize(&g->PXSize, &g->PYSize); 	/* Size of plot window */
+    getorigin(&g->PXPos, &g->PYPos); 	/* Origin of plot window */
     
 #ifdef DEBUG
     printf("Redraw %d: %dx%d+%d+%d %dx%d+%d+%d\n",
@@ -1536,41 +1496,41 @@ void ProcessQueue(void) {
 #endif
     todo = ReDr;
     break;
-  case  DOWNARROWKEY: ExpY -= Delta; INTCHECK(ExpY); todo = ReCa; break;
-  case    UPARROWKEY: ExpY += Delta; INTCHECK(ExpY); todo = ReCa; break;
-  case  LEFTARROWKEY: ExpX -= Delta; INTCHECK(ExpX); todo = ReCa; break;
-  case RIGHTARROWKEY: ExpX += Delta; INTCHECK(ExpX); todo = ReCa; break;
-  case     PAGEUPKEY: ExpM += Delta; INTCHECK(ExpM); todo = ReCa; break;
-  case   PAGEDOWNKEY: ExpM -= Delta; INTCHECK(ExpM); todo = ReCa; break;
+  case  DOWNARROWKEY: p->ExpY -= p->Delta; INTCHECK(p->ExpY); todo = ReCa; break;
+  case    UPARROWKEY: p->ExpY += p->Delta; INTCHECK(p->ExpY); todo = ReCa; break;
+  case  LEFTARROWKEY: p->ExpX -= p->Delta; INTCHECK(p->ExpX); todo = ReCa; break;
+  case RIGHTARROWKEY: p->ExpX += p->Delta; INTCHECK(p->ExpX); todo = ReCa; break;
+  case     PAGEUPKEY: p->ExpM += p->Delta; INTCHECK(p->ExpM); todo = ReCa; break;
+  case   PAGEDOWNKEY: p->ExpM -= p->Delta; INTCHECK(p->ExpM); todo = ReCa; break;
   case PAD4:
-    Activei += NumActive - 2;
+    activei += g->NumActive - 2;
   case PAD6:
-    Activei = (Activei + 1) % NumActive;
-    Active  = Actives[Activei];
+    activei = (activei + 1) % g->NumActive;
+    g->Active  = g->Actives[activei];
     todo    = ReMa;
-    Rewrite = 1;
+    rewrite = 1;
     break;
   case PAD5:
-    if (AutoExp == Active) {
-      AutoExp = AOff;
+    if (p->AutoExp == g->Active) {
+      p->AutoExp = AOff;
       todo    = ReMa;
-      Rewrite = 1;
-    } else if (Active != AXF && Active != AYF) {
-      AutoExp = Active;
+      rewrite = 1;
+    } else if (g->Active != AXF && g->Active != AYF) {
+      p->AutoExp = g->Active;
       todo = ReCa;
     }
     break;
-  case PAD1: if (fak == 0) fak =  -10 * Delta;
-  case PAD2: if (fak == 0) fak =       -Delta;
-  case PAD3: if (fak == 0) fak = -0.1 * Delta;
-  case PAD7: if (fak == 0) fak =   10 * Delta;
-  case PAD8: if (fak == 0) fak =        Delta;
-  case PAD9: if (fak == 0) fak =  0.1 * Delta;
-    if (Active == AXF || Active == AYF)
-      *Variables[Active] = fak > 0 ? 1.0 : -1.0;
+  case PAD1: if (fak == 0) fak =  -10 * p->Delta;
+  case PAD2: if (fak == 0) fak =       -p->Delta;
+  case PAD3: if (fak == 0) fak = -0.1 * p->Delta;
+  case PAD7: if (fak == 0) fak =   10 * p->Delta;
+  case PAD8: if (fak == 0) fak =        p->Delta;
+  case PAD9: if (fak == 0) fak =  0.1 * p->Delta;
+    if (g->Active == AXF || g->Active == AYF)
+      Variables[g->Active] = fak > 0 ? 1.0 : -1.0;
     else
-      *Variables[Active] += fak;
-    INTCHECK(*Variables[Active]);
+      Variables[g->Active] += fak;
+    INTCHECK(Variables[g->Active]);
     todo = ReCa;
     break;
   case KEYBD:
@@ -1580,68 +1540,68 @@ void ProcessQueue(void) {
 	val = 10 * (val - '0') + (val2 - '0');
 	if (val == 99) {
 	  int i;
-	  for (i = 0; i < S; i++) Set[i].active ^= 1;
+	  for (i = 0; i < p->S; i++) p->Set[i].active ^= 1;
 	  todo = ReCa;
-	} else if (val < S) {
-	  Set[val].active ^= 1;
+	} else if (val < p->S) {
+	  p->Set[val].active ^= 1;
 	  todo = ReCa;
 	}
       }
     } else switch(val) {
-    case 'a': AutoScale = 1; todo = ReWr; break;
-    case 'A': AutoScale = 0;              break;
+    case 'a': g->AutoScale = 1; todo = ReWr; break;
+    case 'A': g->AutoScale = 0;              break;
     case 'r':
-      ExpX = ExpX_o;
-      ExpY = ExpY_o;
-      ExpM = ExpM_o;
-      Tc = Tc_o;
-      Lc = Mc = 0;
-      ExpZ  = ExpU = 1;
+      p->ExpX = p->ExpX_o;
+      p->ExpY = p->ExpY_o;
+      p->ExpM = p->ExpM_o;
+      p->Tc = p->Tc_o;
+      p->Lc = p->Mc = 0;
+      p->ExpZ  = p->ExpU = 1;
       todo  = ReCa;
-      ExpLx = ExpLy = ExpLm = ExpLz = 0;
-      ExpDx = ExpDy = ExpDu = 0;
-      XFak  = YFak = 1.0;
-      Active = AutoExp = AOff;
+      p->ExpLx = p->ExpLy = p->ExpLm = p->ExpLz = 0;
+      p->ExpDx = p->ExpDy = p->ExpDu = 0;
+      p->XFak  = p->YFak = 1.0;
+      g->Active = p->AutoExp = AOff;
       break;
-    case 'c': Lc   += Delta; INTCHECK(Lc  ); todo = ReCa; break;
-    case 'C': Lc   -= Delta; INTCHECK(Lc  ); todo = ReCa; break;
-    case 't': Tc   += Delta; INTCHECK(Tc  ); todo = ReCa; break;
-    case 'T': Tc   -= Delta; INTCHECK(Tc  ); todo = ReCa; break;
-    case 'm': Mc   += Delta; INTCHECK(Mc  ); todo = ReCa; break;
-    case 'M': Mc   -= Delta; INTCHECK(Mc  ); todo = ReCa; break;
-    case 'z': ExpZ += Delta; INTCHECK(ExpZ); todo = ReCa; break;
-    case 'Z': ExpZ -= Delta; INTCHECK(ExpZ); todo = ReCa; break;
-    case 'u': ExpU += Delta; INTCHECK(ExpU); todo = ReCa; break;
-    case 'U': ExpU -= Delta; INTCHECK(ExpU); todo = ReCa; break;
-    case 'i': ExpLx+= Delta; INTCHECK(ExpLx);todo = ReCa; break;
-    case 'I': ExpLx-= Delta; INTCHECK(ExpLx);todo = ReCa; break;
-    case 'j': ExpLy+= Delta; INTCHECK(ExpLy);todo = ReCa; break;
-    case 'J': ExpLy-= Delta; INTCHECK(ExpLy);todo = ReCa; break;
-    case 'n': Ny   += Delta; INTCHECK(Ny  ); todo = ReCaBN; break;
-    case 'N': Ny   -= Delta; INTCHECK(Ny  ); todo = ReCaBN; break;
-    case 'b': Beta += Delta; INTCHECK(Beta); todo = ReCaBN; break;
-    case 'B': Beta -= Delta; INTCHECK(Beta); todo = ReCaBN; break;
+    case 'c': p->Lc   += p->Delta; INTCHECK(p->Lc  ); todo = ReCa; break;
+    case 'C': p->Lc   -= p->Delta; INTCHECK(p->Lc  ); todo = ReCa; break;
+    case 't': p->Tc   += p->Delta; INTCHECK(p->Tc  ); todo = ReCa; break;
+    case 'T': p->Tc   -= p->Delta; INTCHECK(p->Tc  ); todo = ReCa; break;
+    case 'm': p->Mc   += p->Delta; INTCHECK(p->Mc  ); todo = ReCa; break;
+    case 'M': p->Mc   -= p->Delta; INTCHECK(p->Mc  ); todo = ReCa; break;
+    case 'z': p->ExpZ += p->Delta; INTCHECK(p->ExpZ); todo = ReCa; break;
+    case 'Z': p->ExpZ -= p->Delta; INTCHECK(p->ExpZ); todo = ReCa; break;
+    case 'u': p->ExpU += p->Delta; INTCHECK(p->ExpU); todo = ReCa; break;
+    case 'U': p->ExpU -= p->Delta; INTCHECK(p->ExpU); todo = ReCa; break;
+    case 'i': p->ExpLx+= p->Delta; INTCHECK(p->ExpLx);todo = ReCa; break;
+    case 'I': p->ExpLx-= p->Delta; INTCHECK(p->ExpLx);todo = ReCa; break;
+    case 'j': p->ExpLy+= p->Delta; INTCHECK(p->ExpLy);todo = ReCa; break;
+    case 'J': p->ExpLy-= p->Delta; INTCHECK(p->ExpLy);todo = ReCa; break;
+    case 'n': p->Ny   += p->Delta; INTCHECK(p->Ny  ); todo = ReCaBN; break;
+    case 'N': p->Ny   -= p->Delta; INTCHECK(p->Ny  ); todo = ReCaBN; break;
+    case 'b': p->Beta += p->Delta; INTCHECK(p->Beta); todo = ReCaBN; break;
+    case 'B': p->Beta -= p->Delta; INTCHECK(p->Beta); todo = ReCaBN; break;
 #if 0
-    case 'd': ExpDx+= Delta; INTCHECK(ExpDx);todo = ReCa; break;
-    case 'D': ExpDx-= Delta; INTCHECK(ExpDx);todo = ReCa; break;
-    case 'b': ExpDy+= Delta; INTCHECK(ExpDy);todo = ReCa; break;
-    case 'B': ExpDy-= Delta; INTCHECK(ExpDy);todo = ReCa; break;
+    case 'd': ExpDx+= p->Delta; INTCHECK(ExpDx);todo = ReCa; break;
+    case 'D': ExpDx-= p->Delta; INTCHECK(ExpDx);todo = ReCa; break;
+    case 'b': ExpDy+= p->Delta; INTCHECK(ExpDy);todo = ReCa; break;
+    case 'B': ExpDy-= p->Delta; INTCHECK(ExpDy);todo = ReCa; break;
 #endif
       
-    case 'l': Lines = (Lines + 1) % 3; todo = ReWr; break;
-    case 'g': Grid ^= 1;               todo = ReWr; break;
-    case 'v': ShowVar ^= 1;            todo = ReVa; break;
-    case 'V': VarType = (VarType + 1) % 2; todo = Bewert ? ReVa : ReNone; break;
-    case '<': Delta *= 0.1; todo = AutoExp ? ReCa : ReMa; break;
-    case '>': Delta *= 10.; todo = AutoExp ? ReCa : ReMa; break;
-    case 'x': AutoScale = 1; LogX ^= 1; todo = Bewert ? ReVa : ReWr; break;
-    case 'y': AutoScale = 1; LogY ^= 1; todo =                 ReWr; break;
+    case 'l': g->Lines = (g->Lines + 1) % 3; todo = ReWr; break;
+    case 'g': g->Grid ^= 1;                  todo = ReWr; break;
+    case 'v': g->ShowVar ^= 1;               todo = ReVa; break;
+    case 'V': p->VarType = (p->VarType + 1) % 2; todo = p->Bewert ? ReVa : ReNone; break;
+    case '<': p->Delta *= 0.1; todo = p->AutoExp ? ReCa : ReMa; break;
+    case '>': p->Delta *= 10.; todo = p->AutoExp ? ReCa : ReMa; break;
+    case 'x': g->AutoScale = 1; p->LogX ^= 1; todo = p->Bewert ? ReVa : ReWr; break;
+    case 'y': g->AutoScale = 1; p->LogY ^= 1; todo =                    ReWr; break;
     case 's': gl2ppm("| ppmtogif > fsscale.gif"); break;
-    case 'p': RemoveFiles = 1; write_both(1); break;
-    case 'P': RemoveFiles = 0; write_both(1); break;
+    case 'p': g->RemoveFiles = 1; rewrite = write_both(1, rewrite); break;
+    case 'P': g->RemoveFiles = 0; rewrite = write_both(1, rewrite); break;
     case 'q':
     case '\033':
-      if (RemoveFiles == 0) write_dats();
+      if (g->RemoveFiles == 0) write_dats();
       byebye(0);
       break;
     }
@@ -1650,81 +1610,81 @@ void ProcessQueue(void) {
     break;
   }
   
-  Bewert = ShowVar || AutoExp;
+  p->Bewert = g->ShowVar || p->AutoExp;
   
-  if (!AutoExp) fitfak = 0; /* stop fit */
+  if (!p->AutoExp) fitfak = 0; /* stop fit */
   
   if (fitfak) {
-    double oerr = Error; /* Error should be set */
-    *Variables[AutoExp]
-      = floor(*Variables[AutoExp] / Delta + 0.5) * Delta + fitfak * Delta;
-    INTCHECK(*Variables[AutoExp]);
-    Calculate();
-    Error = Valuate();
-    /*DrawMain();*/ 
+    double oerr = p->Error; /* Error should be set */
+    Variables[p->AutoExp]
+      = floor(Variables[p->AutoExp] / p->Delta + 0.5) * p->Delta + fitfak * p->Delta;
+    INTCHECK(Variables[p->AutoExp]);
+    Calculate(p);
+    p->Error = Valuate(p);
     if(todo == ReNone) todo = ReMa;
     
-    if (Error >= oerr) {
+    if (p->Error >= oerr) {
       /* undo change and go on in opposite direction */
-      *Variables[AutoExp] -= fitfak * Delta;
-      INTCHECK(*Variables[AutoExp]);
+      Variables[p->AutoExp] -= fitfak * p->Delta;
+      INTCHECK(Variables[p->AutoExp]);
       switch (fitfak) {
       case 1:
-	Error  = oerr;
-	fitfak = -1;
+	p->Error = oerr;
+	fitfak   = -1;
 	break;
       case -1:
 	/* found */
-	Calculate();
-	Error  = Valuate();
-	fitfak = 0;
-	todo   = ReWr;
+	Calculate(p);
+	p->Error = Valuate(p);
+	fitfak   = 0;
+	todo     = ReWr;
       }
     }
   }
   
   switch(todo) {
   case ReCaBN:
-    ExpX = 1.0  / Ny;
-    ExpY = Beta / Ny;
+    p->ExpX = 1.0     / p->Ny;
+    p->ExpY = p->Beta / p->Ny;
     goto calc;
   case ReCa:
-    Ny   = 1.0 / ExpX;
-    Beta = Ny  * ExpY;
+    p->Ny   = 1.0    / p->ExpX;
+    p->Beta = p->Ny  * p->ExpY;
   calc:
-    Calculate();
+    Calculate(p);
     /* fallthru */
   case ReVa:
-    if (Bewert)  Error = Valuate();
-    if (AutoExp) fitfak = 1;
+    if (p->Bewert)  p->Error = Valuate(p);
+    if (p->AutoExp) fitfak = 1;
     /* fallthru */
   case ReWr:
-    Rewrite = 1;
+    rewrite = 1;
     /* fallthru */
   case ReDr:
   case ReMa:
-    DrawMain();
-    if(todo != ReMa) DrawPlot();
-    ShowPos(mx, my, showpos);
+    if (g->AutoScale) AutoScale(p);
+    DrawMain(p, g);
+    ShowPos(p, g, mx, my, showpos);
+    if(todo != ReMa) DrawPlot(p);
   }
 }
 
-void write_both(int flag) {
+int write_both(int flag, int rewrite) {
   static plotting = 0;
   
-  if (!(flag || plotting)) return; /* flag == 1 when 'p' was pressed
-				      plotting == 1 when we are in
-				      "plotting-mode", i. e. 'p' has been
-				      pressed at least once */
-  if (!Rewrite && !flag) return;   /* Rewrite == 1 when plot has changed
-				      and needs to be Rewritten.
-				      flag forces a Rewrite (see above) */
-  color(FgColor); rectfi(0,0,2,2); sleep(0);
+  if (!(flag || plotting)) return rewrite; /* flag == 1 when 'p' was pressed
+					      plotting == 1 when we are in
+					      "plotting-mode", i. e. 'p' has been
+					      pressed at least once */
+  if (!rewrite && !flag) return rewrite;   /* Rewrite == 1 when plot has changed
+					      and needs to be Rewritten.
+					      flag forces a Rewrite (see above) */
+  color(Gp->FgColor); rectfi(0,0,2,2); sleep(0);
   plotting = 1;
-  Rewrite = 0;
   write_gnuplot();
   write_xmgr();
-  color(BgColor); rectfi(0,0,2,2); sleep(0);
+  color(Gp->BgColor); rectfi(0,0,2,2); sleep(0);
+  return 0;
 }
 
 char *gnuplot_label(char *to, const char *from) {
@@ -1810,12 +1770,8 @@ void write_xmgr(void) {
   char *logtype[2][2] = {{"xy", "logy"}, {"logx", "logxy"}};
   char xlab[128], ylab[128];
   
-  if (XmgrName[0] == 0) {
-    sprintf(XmgrName, "fsscale-%d-%s,%s.xmgr", 
-	    getpid(), Names[1], Names[2]);
-  }
-  if ((xmgrfile = fopen(XmgrName, "w")) == NULL) {
-    perror(XmgrName);
+  if ((xmgrfile = fopen(Gp->XmgrName, "w")) == NULL) {
+    perror(Gp->XmgrName);
     return;
   }
   
@@ -1849,32 +1805,32 @@ void write_xmgr(void) {
 	  "@ yaxis ticklabel start type spec\n"
 	  "@ yaxis ticklabel start %g\n"
 	  "@ legend on\n",
-	  Progname,
-	  logtype[LogX][LogY],
-	  LogX ? exp10(OXmin) : OXmin,
-	  LogX ? exp10(OXmax) : OXmax,
-	  LogY ? exp10(OYmin) : OYmin,
-	  LogY ? exp10(OYmax) : OYmax,
-	  Title,
-	  xmgr_label(xlab, Xlab),
-	  Ticks[0].t0, Ticks[0].t1,
-	  Ticks[0].t0 * ceil(OXmin / Ticks[0].t0),
-	  xmgr_label(ylab, Ylab),
-	  Ticks[1].t0, Ticks[1].t1,
-	  Ticks[1].t0 * ceil(OYmin / Ticks[1].t0)
+	  Pp->Progname,
+	  logtype[Pp->LogX][Pp->LogY],
+	  Pp->LogX ? exp10(Pp->OXmin) : Pp->OXmin,
+	  Pp->LogX ? exp10(Pp->OXmax) : Pp->OXmax,
+	  Pp->LogY ? exp10(Pp->OYmin) : Pp->OYmin,
+	  Pp->LogY ? exp10(Pp->OYmax) : Pp->OYmax,
+	  Gp->Title,
+	  xmgr_label(xlab, Gp->Xlab),
+	  Pp->Ticks[0].t0, Pp->Ticks[0].t1,
+	  Pp->Ticks[0].t0 * ceil(Pp->OXmin / Pp->Ticks[0].t0),
+	  xmgr_label(ylab, Gp->Ylab),
+	  Pp->Ticks[1].t0, Pp->Ticks[1].t1,
+	  Pp->Ticks[1].t0 * ceil(Pp->OYmin / Pp->Ticks[1].t0)
 	  );
-  for (i = k = 0; i < S; i++) if (Set[i].active) {
+  for (i = k = 0; i < Pp->S; i++) if (Pp->Set[i].active) {
     /* k should be i, but there is a bug in xmgr... */
-    Set_t *s  = &Set[i];
+    Set_t *s  = &Pp->Set[i];
     
-    fprintf(xmgrfile, "@ s%d linewidth %d\n",		k, Lines);
+    fprintf(xmgrfile, "@ s%d linewidth %d\n",		k, Gp->Lines);
     fprintf(xmgrfile, "@ s%d color %d\n",		k, i + 1);
     fprintf(xmgrfile, "@ s%d symbol %d\n",		k, i + 2);
     fprintf(xmgrfile, "@ s%d symbol color %d\n",	k, i + 1);
     fprintf(xmgrfile, "@ s%d symbol size 0.5\n",	k);
     fprintf(xmgrfile, "@ s%d type xy\n",		k);
     fprintf(xmgrfile, "@ s%d comment \" Bla \"\n",	k);
-    fprintf(xmgrfile, "@ legend string %d \"%s = %g\"\n",k, Names[0], s->L);
+    fprintf(xmgrfile, "@ legend string %d \"%s = %g\"\n",k, Gp->Names[0], s->L);
     for (j = 0; j < s->N; j++) {
       Data_t *d = &s->Data[j];
       fprintf(xmgrfile, "%g %g\n", d->x, d->y);
@@ -1888,20 +1844,20 @@ void write_xmgr(void) {
 
 void write_dats(void) {
   int i, j;
-  for (i = 0; i < S; i++) if (Set[i].active) {
-    Set_t *s  = &Set[i];
+  for (i = 0; i < Pp->S; i++) if (Pp->Set[i].active) {
+    Set_t *s  = &Pp->Set[i];
     char datfilename[256];
     FILE *tn;
     
     sprintf(datfilename, "fsscale-%d-%s,%s,%s=%g.dat",
-	    getpid(), Names[1], Names[2], Names[0], s->L);
+	    getpid(), Gp->Names[1], Gp->Names[2], Gp->Names[0], s->L);
     
     if ((tn = fopen(datfilename, "w")) == NULL) {
       perror(datfilename);
     } else {
       fprintf(tn,
 	      "##Params: %s=%g\n##Names: %s %s\n",
-	      Names[0], s->L, Names[1], Names[2]);
+	      Gp->Names[0], s->L, Gp->Names[1], Gp->Names[2]);
       for (j = 0; j < s->N; j++) {
 	Data_t *d = &s->Data[j];
 	fprintf(tn, "%g %g\n", d->x, d->y);
@@ -1917,58 +1873,54 @@ void write_gnuplot(void) {
   const char *styles[] = { "points", "lines", "linespoints" };
   char xlab[128], ylab[128];
   
-  if (GPName[0] == 0) {
-    sprintf(GPName, "fsscale-%d-%s,%s.gp", 
-	    getpid(), Names[1], Names[2]);
-  }
-  if ((gpfile = fopen(GPName, "w")) == NULL) {
-    perror(GPName);
+  if ((gpfile = fopen(Gp->GPName, "w")) == NULL) {
+    perror(Gp->GPName);
     return;
   }
-  fprintf(gpfile, "set %slog x\n", LogX ? "" : "no");
-  fprintf(gpfile, "set %slog y\n", LogY ? "" : "no");
-  fprintf(gpfile, "set %sgrid\n",  Grid ? "" : "no");
+  fprintf(gpfile, "set %slog x\n", Pp->LogX ? "" : "no");
+  fprintf(gpfile, "set %slog y\n", Pp->LogY ? "" : "no");
+  fprintf(gpfile, "set %sgrid\n",  Gp->Grid ? "" : "no");
   
-  fprintf(gpfile, "set data style %s\n", styles[Lines]);
-  fprintf(gpfile, "set title '%s'\n", Title);
+  fprintf(gpfile, "set data style %s\n", styles[Gp->Lines]);
+  fprintf(gpfile, "set title '%s'\n", Gp->Title);
   
-  fprintf(gpfile, "set xlabel '%s'\n", gnuplot_label(xlab, Xlab));
-  fprintf(gpfile, "set ylabel '%s'\n", gnuplot_label(ylab, Ylab));
+  fprintf(gpfile, "set xlabel '%s'\n", gnuplot_label(xlab, Gp->Xlab));
+  fprintf(gpfile, "set ylabel '%s'\n", gnuplot_label(ylab, Gp->Ylab));
   
   fprintf(gpfile, "plot [%g:%g][%g:%g] ",
-	  LogX ? exp10(OXmin) : OXmin,
-	  LogX ? exp10(OXmax) : OXmax,
-	  LogY ? exp10(OYmin) : OYmin,
-	  LogY ? exp10(OYmax) : OYmax);
+	  Pp->LogX ? exp10(Pp->OXmin) : Pp->OXmin,
+	  Pp->LogX ? exp10(Pp->OXmax) : Pp->OXmax,
+	  Pp->LogY ? exp10(Pp->OYmin) : Pp->OYmin,
+	  Pp->LogY ? exp10(Pp->OYmax) : Pp->OYmax);
 
   first = 1;
-  for (i = 0; i < S; i++) if (Set[i].active) {
-    Set_t *s  = &Set[i];
+  for (i = 0; i < Pp->S; i++) if (Pp->Set[i].active) {
+    Set_t *s  = &Pp->Set[i];
 #ifdef GNUPLOT_DATFILES
     fprintf(gpfile, "%c'%s' title '%s=%g'",
 	    first ? ' ' : ',',
 	    s->datfilename,
-	    Names[0], s->L);
+	    Gp->Names[0], s->L);
 #else
     fprintf(gpfile, "%c'-' title '%s=%g'",
 	    first ? ' ' : ',',
-	    Names[0], s->L);
+	    Gp->Names[0], s->L);
 #endif
     first = 0;
   }
   fprintf(gpfile, "\n");
 #ifdef GNUPLOT_DATFILES
-  for (i = 0; i < S; i++) if (Set[i].active) {
-    Set_t *s  = &Set[i];
+  for (i = 0; i < p->S; i++) if (p->Set[i].active) {
+    Set_t *s  = &p->Set[i];
     if (s->datfilename[0] == 0) {
       sprintf(s->datfilename, "fsscale-%d-%s,%s,%s=%g.dat",
-	      getpid(), Names[1], Names[2], Names[0], s->L);
+	      getpid(), Gp->Names[1], Gp->Names[2], Gp->Names[0], s->L);
     }
     if ((s->datfile = fopen(s->datfilename, "w")) == NULL) {
       perror(s->datfilename);
     } else {
       fprintf(s->datfile, "##Params: %s=%g\n##Names: %s %s\n",
-	      Names[0], s->L, Names[1], Names[2]);
+	      Gp->Names[0], s->L, Gp->Names[1], Gp->Names[2]);
       for (j = 0; j < s->N; j++) {
 	Data_t *d = &s->Data[j];
 	fprintf(s->datfile, "%g %g\n", d->x, d->y);
@@ -1977,32 +1929,69 @@ void write_gnuplot(void) {
     fclose(s->datfile);
   }
 #else
-  for (i = 0; i < S; i++) if (Set[i].active) {
-    Set_t *s  = &Set[i];
+  for (i = 0; i < Pp->S; i++) if (Pp->Set[i].active) {
+    Set_t *s  = &Pp->Set[i];
     for (j = 0; j < s->N; j++) {
       Data_t *d = &s->Data[j];
       fprintf(gpfile, "%g %g\n", d->x, d->y);
     }
-    fprintf(gpfile, "end %s = %g\n", Names[0], s->L);
+    fprintf(gpfile, "end %s = %g\n", Gp->Names[0], s->L);
   }
 #endif
   fclose(gpfile);
 }
   
 int main(int argc, char *argv[]) {
+  NumParams P;
+  
+  GraphParams G = {
+    {WHITE, GREEN, YELLOW, CYAN, MAGENTA, RED, GRAY},
+    WHITE,
+    BLACK,
+    180,
+    1,
+    1,
+    0,
+    1,
+    400, 400,
+    "FSScale",
+    "-*-Times-Medium-R-Normal--*-120-*-*-*-*-*-*",
+    {"L", "T", "M", "D"},
+    {0.02, 0.01},
+    {0, 1, 2, 3, 4, 5, 6,/*7*/ 8, 9, 10, 11,/*12*/ 13,/*14*/ 15, 16, 17}
+  };
+  
+  Pp = &P;
+  Gp = &G;
+  
   signal(SIGFPE, SIG_IGN); /* 4 Linux */
   signal(SIGHUP,  byebye);
   signal(SIGTERM, byebye);
   signal(SIGINT,  byebye);
-  /*starttime = time(NULL);*/
-  Progname = argv[0];
+  
+  memset(&P, 0, sizeof(NumParams));
+  P.Progname = argv[0];
+  P.Delta = 0.1;
+  P.ExpZ = 1.0;
+  P.ExpU = 1.0;
+  P.XFak = 1.0;
+  P.YFak = 1.0;
+  P.Ny = 1.0 / P.ExpX;
+  P.FullFit = 1;
+  
   if (isatty(fileno(stdin)))
-   fprintf(stderr, "%s: reading input from terminal.\n", Progname);
-  Ny = 1.0 / ExpX;
-  GetArgs(argc, argv);
-  ReadData();
-  GraphInit();
-  Calculate();
-  if (Bewert) Error = Valuate();
-  while (1) ProcessQueue();
+    fprintf(stderr, "%s: reading input from terminal.\n", P.Progname);
+  
+  GetArgs(&P, &G, argc, argv);
+  
+  sprintf(G.GPName, "fsscale-%d-%s,%s.gp", 
+	  getpid(), G.Names[1], G.Names[2]);
+  sprintf(G.XmgrName, "fsscale-%d-%s,%s.xmgr", 
+	  getpid(), G.Names[1], G.Names[2]);
+  
+  ReadData(&P);
+  GraphInit(&G);
+  Calculate(&P);
+  if (P.Bewert) P.Error = Valuate(&P);
+  while (1) ProcessQueue(&P, &G);
 }
