@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995, 1996
  *
- * $Id: fsscale.c,v 2.18 1996/12/05 12:15:01 michael Exp michael $
+ * $Id: fsscale.c,v 2.19 1997/03/12 15:08:45 michael Exp michael $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.19  1997/03/12 15:08:45  michael
+ * added 'P' key for static datafiles for gnuplot output
+ *
  * Revision 2.18  1996/12/05 12:15:01  michael
  * fixed another bug in gnuplot()
  *
@@ -108,7 +111,7 @@ typedef struct Set_t_ {
   double tmp;
   int    sorted;
 #endif
-  char datfilename[16];
+  char datfilename[256];
   FILE *datfile;
 } Set_t;
 
@@ -177,7 +180,7 @@ int    Swh, FontH, FontD;
 char   *Title = "FSScale";
 char   *Progname;
 char   *Font  = "-*-Times-Medium-R-Normal--*-120-*-*-*-*-*-*";
-char   *RCSId = "$Id: fsscale.c,v 2.18 1996/12/05 12:15:01 michael Exp michael $";
+char   *RCSId = "$Id: fsscale.c,v 2.19 1997/03/12 15:08:45 michael Exp michael $";
 
 #define NUMACTIVE (sizeof(Variables)/sizeof(Variables[0]))
 double dummy = 0.0, *Variables[] = {
@@ -228,7 +231,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.18 $ (C) Fred Hucht 1995, 1996\n"
+	    "$Revision: 2.19 $ (C) Fred Hucht 1995, 1996\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
@@ -1433,7 +1436,8 @@ void gnuplot(int flag) {
   color(FgColor); rectfi(0,0,2,2); sleep(0);
   plotting = 1;
   replot = 0;
-  sprintf(gpfname, "%s.%d", GNUPLOTFILE, (int)(starttime - 851472000));
+  sprintf(gpfname, "%s.%d.X", GNUPLOTFILE, (int)(starttime - 851472000));
+  mkstemp(gpfname);
   if ((gpfile = fopen(gpfname, "w")) == NULL) {
     perror(gpfname);
     return;
@@ -1441,8 +1445,8 @@ void gnuplot(int flag) {
   for(i = 0; i < S; i++) if(Set[i].active) {
     Set_t *s  = &Set[i];
     if(s->datfilename[0] == 0) {
-      sprintf(s->datfilename, "fsc.%d.XXX", (int)(starttime - 851472000));
-      mktemp(s->datfilename);
+      sprintf(s->datfilename, "%s.dat.XXX", gpfname);
+      mkstemp(s->datfilename);
     }
     if((s->datfile = fopen(s->datfilename, "w")) == NULL) {
       perror(s->datfilename);
