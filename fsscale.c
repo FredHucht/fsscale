@@ -1,7 +1,7 @@
 /*
+ * Finite Size scaling (C) Fred Hucht 1995, 1996
  *
- * Finite Size scaling (C) Fred Hucht 1996
- *
+ * $Id: fsscale.c,v 2.0 1996/07/19 18:49:46 fred Exp $
  */
 #include <X11/Ygl.h>
 #include <stdio.h>
@@ -44,6 +44,7 @@ typedef struct Set_t_ {
   double  A[ASZ];	/* Fit */
   double lA[ASZ];	/* logFit */
   double tmp;
+  int    sorted;
 #endif
 } Set_t;
 
@@ -97,6 +98,7 @@ int    Swh, FontH, FontD;
 char   *Title = "FSScale";
 char   *Progname;
 char   *Font  = "-*-Times-Medium-R-Normal--*-120-*-*-*-*-*-*";
+char   *RCSId = "$Id: fsscale.c,v 2.0 1996/07/19 18:49:46 fred Exp $";
 
 double exp10(double x) {
   return pow(10.0, x);
@@ -109,7 +111,7 @@ void Usage(int verbose) {
 	  Progname);
   if(verbose)
     fprintf(stderr,
-	    "       V 2.0 (C) Fred Hucht 1996\n"
+	    "       $Revision: 2.0 $ (C) Fred Hucht 1995, 1996\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
@@ -296,6 +298,9 @@ void ReadData(void) {
 	  s->active = 1;
 	  s->N      = 0;
 	  s->Data   = (Data_t*) malloc(sizeof(Data_t));
+	  s->sorted = 1;
+	} else if(s->sorted && s->Data[s->N-1].T > T) {
+	  s->sorted = 0;
 	}
 	
 	s->Data = (Data_t*) realloc(s->Data, (s->N+1) * sizeof(Data_t));
@@ -378,7 +383,11 @@ void Calculate(void) {
 #ifdef BEWERT
 #define NODATA  4711.0815
   if(ShowVar) {
-    for(i = 0; i < S; i++) if(Set[i].active) {
+    for(i = 0; i < S; i++) if(Set[i].active) if(!Set[i].sorted) {
+      fprintf(stderr,
+	      "Dataset %d (L = %g) not sorted, can't include into variance.\n",
+	      i, Set[i].L);
+    } else {
       Set_t *s  = &Set[i];
       double m;
       int ja;
