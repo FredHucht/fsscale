@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995, 1996
  *
- * $Id: fsscale.c,v 2.17 1996/11/14 15:24:42 michael Exp michael $
+ * $Id: fsscale.c,v 2.18 1996/12/05 12:15:01 michael Exp michael $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.18  1996/12/05 12:15:01  michael
+ * fixed another bug in gnuplot()
+ *
  * Revision 2.17  1996/11/14 15:24:42  michael
  * fixed a bug in gnuplot() (int first etc...)
  *
@@ -65,6 +68,7 @@
 #include <string.h>
 #include <signal.h>
 #include <unistd.h>
+#include <time.h>
 
 #define GNUPLOTFILE "fsscale.gp"
 #define BEWERT
@@ -165,13 +169,15 @@ int    replot = 1;
 #ifdef BEWERT
 int    ShowVar = 0;
 #endif
+int removedatafile = 1;
 double Delta = 0.1;
+time_t starttime;
 Int32  MainW, PlotW;
 int    Swh, FontH, FontD;
 char   *Title = "FSScale";
 char   *Progname;
 char   *Font  = "-*-Times-Medium-R-Normal--*-120-*-*-*-*-*-*";
-char   *RCSId = "$Id: fsscale.c,v 2.17 1996/11/14 15:24:42 michael Exp michael $";
+char   *RCSId = "$Id: fsscale.c,v 2.18 1996/12/05 12:15:01 michael Exp michael $";
 
 #define NUMACTIVE (sizeof(Variables)/sizeof(Variables[0]))
 double dummy = 0.0, *Variables[] = {
@@ -198,7 +204,7 @@ void byebye(int sig);
 
 void byebye(int sig) {
   int i;
-  for(i = 0; i < S; i++) {
+  if (removedatafile) for(i = 0; i < S; i++) {
     Set_t *s  = &Set[i];
     if(s->datfilename[0] != 0) remove(s->datfilename);
   }
@@ -222,7 +228,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.17 $ (C) Fred Hucht 1995, 1996\n"
+	    "$Revision: 2.18 $ (C) Fred Hucht 1995, 1996\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
@@ -283,7 +289,8 @@ void Usage(int verbose) {
 	    "  Key 'r':            Reset all values to commandline values\n"
 	    "  Key 'l':            Toggle drawing of lines\n"
 	    "  Key 'g':            Toggle drawing of grid\n"
-	    "  Key 'p':            Write gnuplot-loadable file 'fsscale.gp'\n"
+	    "  Key 'p':            Write gnuplot-loadable file 'fsscale.gp.xxxxxxx'\n"
+	    "  Key 'P':            as 'p', but don't delete datafiles on exit\n"
 	    "  Key 's':            Save actual graph to file 'fsscale.gif'\n"
 #ifdef BEWERT
 	    "  Key 'v':            Toggle drawing of variance function\n"
@@ -1376,7 +1383,8 @@ void ProcessQueue(void) {
     case 'x': AutoScale = 1; LogX ^= 1; replot = rd = 1; break;
     case 'y': AutoScale = 1; LogY ^= 1; replot = rd = 1; break;
     case 's': gl2ppm("| ppmtogif > fsscale.gif"); break;
-    case 'p': gnuplot(1); break;
+    case 'p': removedatafile = 1; gnuplot(1); break;
+    case 'P': removedatafile = 0; gnuplot(1); break;
     case 'q':
     case '\033':
       byebye(0);
@@ -1412,6 +1420,7 @@ void gnuplot(int flag) {
   FILE *gpfile;
   int i, j, first;
   static plotting = 0;
+  char gpfname[256];
   char *styles[] = { "points", "lines", "linespoints" };
 
   if (!(flag || plotting)) return; /* flag == 1 when 'p' was pressed
@@ -1424,14 +1433,17 @@ void gnuplot(int flag) {
   color(FgColor); rectfi(0,0,2,2); sleep(0);
   plotting = 1;
   replot = 0;
-  if ((gpfile = fopen(GNUPLOTFILE, "w")) == NULL) {
-    perror(GNUPLOTFILE);
+  sprintf(gpfname, "%s.%d", GNUPLOTFILE, (int)(starttime - 851472000));
+  if ((gpfile = fopen(gpfname, "w")) == NULL) {
+    perror(gpfname);
     return;
   }
   for(i = 0; i < S; i++) if(Set[i].active) {
     Set_t *s  = &Set[i];
-    if(s->datfilename[0] == 0)
-      mktemp(strcpy(s->datfilename, "/tmp/fscXXXXXX"));
+    if(s->datfilename[0] == 0) {
+      sprintf(s->datfilename, "fsc.%d.XXX", (int)(starttime - 851472000));
+      mktemp(s->datfilename);
+    }
     if((s->datfile = fopen(s->datfilename, "w")) == NULL) {
       perror(s->datfilename);
     } else for(j = 0; j < s->N; j++) {
@@ -1474,6 +1486,7 @@ int main(int argc, char *argv[]) {
   signal(SIGHUP,  byebye);
   signal(SIGTERM, byebye);
   signal(SIGINT,  byebye);
+  starttime = time(NULL);
   Progname = argv[0];
   if(isatty(fileno(stdin)))
    fprintf(stderr, "%s: reading input from terminal.\n", Progname);
