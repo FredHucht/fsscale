@@ -1,10 +1,13 @@
 /* -*- mode: c;  c-basic-offset: 2 -*-
  * 
- * Finite Size scaling (C) Fred Hucht 1995-2000
+ * Finite Size scaling (C) Fred Hucht 1995-2001
  *
- * $Id: fsscale.c,v 2.45 2001-02-14 10:51:58+01 fred Exp fred $
+ * $Id: fsscale.c,v 2.46 2001-02-15 10:37:57+01 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.46  2001-02-15 10:37:57+01  fred
+ * buffer overflow in ReadData
+ *
  * Revision 2.45  2001-02-14 10:51:58+01  fred
  * *** empty log message ***
  *
@@ -143,7 +146,7 @@
  */
 /*#pragma OPTIONS inline+Pow*/
 
-char   *RCSId = "$Id: fsscale.c,v 2.45 2001-02-14 10:51:58+01 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.46 2001-02-15 10:37:57+01 fred Exp fred $";
 
 /* Note: AIX: Ignore warnings "No function prototype given for 'finite'" See math.h, line 429 */
 
@@ -325,7 +328,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.45 $ (C) Fred Hucht 1995-1998\n"
+	    "$Revision: 2.46 $ (C) Fred Hucht 1995-1998\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
@@ -828,21 +831,23 @@ double Valuate(NumParams *p) {
 void DrawTickX(const NumParams *p, const GraphParams *g, double x, int level) {
   double len = g->LevelLen[level];
   if (g->Grid && level == 0) {
+    setlinestyle(2);
     move2(x, p->OYmin); draw2(x, p->OYmax);
-  } else {
-    move2(x, p->OYmin); draw2(x, p->OYmin + len * (p->OYmax - p->OYmin));
-    move2(x, p->OYmax); draw2(x, p->OYmax - len * (p->OYmax - p->OYmin));
+    setlinestyle(0);
   }
+  move2(x, p->OYmin); draw2(x, p->OYmin + len * (p->OYmax - p->OYmin));
+  move2(x, p->OYmax); draw2(x, p->OYmax - len * (p->OYmax - p->OYmin));
 }
 
 void DrawTickY(const NumParams *p, const GraphParams *g, double y, int level) {
   double len = g->LevelLen[level];
   if (g->Grid && level == 0) {
+    setlinestyle(2);
     move2(p->OXmin, y); draw2(p->OXmax, y);
-  } else {
-    move2(p->OXmin, y); draw2(p->OXmin + len * (p->OXmax - p->OXmin), y);
-    move2(p->OXmax, y); draw2(p->OXmax - len * (p->OXmax - p->OXmin), y);
+    setlinestyle(0);
   }
+  move2(p->OXmin, y); draw2(p->OXmin + len * (p->OXmax - p->OXmin), y);
+  move2(p->OXmax, y); draw2(p->OXmax - len * (p->OXmax - p->OXmin), y);
 }
 
 int bgnenddraw(int bgn) {
