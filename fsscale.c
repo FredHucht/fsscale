@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995-1998
  *
- * $Id: fsscale.c,v 2.31 1998-02-12 15:17:35+01 fred Exp $
+ * $Id: fsscale.c,v 2.33 1998-02-26 15:31:43+01 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.33  1998-02-26 15:31:43+01  fred
+ * Cosmetic
+ *
  * Revision 2.32  1998-02-26 15:22:45+01  fred
  * Added fit stuff
  *
@@ -237,7 +240,7 @@ int    Swh, FontH, FontD;
 char   *Title = "FSScale";
 char   *Progname;
 char   *Font  = "-*-Times-Medium-R-Normal--*-120-*-*-*-*-*-*";
-char   *RCSId = "$Id: fsscale.c,v 2.31 1998-02-12 15:17:35+01 fred Exp $";
+char   *RCSId = "$Id: fsscale.c,v 2.33 1998-02-26 15:31:43+01 fred Exp fred $";
 char   GPName[256]   = "";
 char   XmgrName[256] = "";
 
@@ -301,7 +304,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.31 $ (C) Fred Hucht 1995-1998\n"
+	    "$Revision: 2.33 $ (C) Fred Hucht 1995-1998\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
@@ -1725,39 +1728,10 @@ void ProcessQueue(void) {
   
   Bewert = ShowVar || AutoExp;
   
-  if (fitfak && !AutoExp) { /* stop fit */
-    fitfak = 0;
-    todo   = ReMa;
-  }
-  
-  switch(todo) {
-  case ReCa:
-    Ny   = 1.0 / ExpX;
-    Beta = Ny  * ExpY;
-    break;
-  case ReCaBN:
-    ExpX = 1.0  / Ny;
-    ExpY = Beta / Ny;
-    break;
-  }
-  
-  switch (todo) {
-  case ReCa:
-  case ReCaBN:
-    Calculate();
-    /* fallthru */
-  case ReVa:
-    if (Bewert) Error = Valuate();
-    if (AutoExp) {
-      fitfak = 1;
-      todo = ReDr;
-    } else {
-      todo = ReWr /*Rewrite = rd = 1*/;
-    }
-  }
+  if (!AutoExp) fitfak = 0; /* stop fit */
   
   if (fitfak) {
-    double oerr = Error;
+    double oerr = Error; /* Error should be set */
     *Variables[AutoExp]
       = floor(*Variables[AutoExp] / Delta + 0.5) * Delta + fitfak * Delta;
     INTCHECK(*Variables[AutoExp]);
@@ -1785,7 +1759,21 @@ void ProcessQueue(void) {
     }
   }
   
-  switch (todo) {
+  switch(todo) {
+  case ReCaBN:
+    ExpX = 1.0  / Ny;
+    ExpY = Beta / Ny;
+    goto calc;
+  case ReCa:
+    Ny   = 1.0 / ExpX;
+    Beta = Ny  * ExpY;
+  calc:
+    Calculate();
+    /* fallthru */
+  case ReVa:
+    if (Bewert)  Error = Valuate();
+    if (AutoExp) fitfak = 1;
+    /* fallthru */
   case ReWr:
     Rewrite = 1;
     /* fallthru */
