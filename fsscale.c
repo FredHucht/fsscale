@@ -1,6 +1,6 @@
 /*
  *
- * Finite Size scaling (C) Fred Hucht 1995
+ * Finite Size scaling (C) Fred Hucht 1996
  *
  */
 #include <X11/Ygl.h>
@@ -8,9 +8,11 @@
 #include <stdlib.h>
 #include <malloc.h>
 #include <math.h>
+#include <string.h>
+#include <signal.h>
 
-/* #define EXPT */
-/* #define BEWERT */
+#define EXPT
+#define BEWERT
 
 #ifndef MAX
 # define MAX(a, b) ((a) > (b) ? (a) : (b))
@@ -22,10 +24,7 @@
 #define ZCHECK(var) if(fabs(var) < 1e-10) var = 0.0
 
 #define GRAY 8
-
 #define FRAME 	10
-#define SWH 	50		/* subwindow height */
-#define ASZ	500
 
 typedef struct Data_t_ {
   double T;			/* X-axis, normally temperature */
@@ -37,37 +36,42 @@ typedef struct Data_t_ {
 typedef struct Set_t_ {
   double L;		/* Scaling parameter, normally linear system size */
   int    color;		/**/
+  int    active;
   int	 N;		/* Number of data points */
   Data_t *Data;		/* Set data */
 #ifdef BEWERT
-  double A[ASZ];	/* Fit */
+#define ASZ	1000
+  double  A[ASZ];	/* Fit */
   double lA[ASZ];	/* logFit */
+  double tmp;
 #endif
 } Set_t;
 
 #ifdef BEWERT
-double  Mean[ASZ], Var[ASZ];
-double LMean[ASZ], LVar[ASZ];
+double  Mean[ASZ], Var[ASZ][2];
+double LMean[ASZ], LVar[ASZ][2];
 #endif
 
 int Colors[] = {WHITE, GREEN, YELLOW, CYAN, MAGENTA, RED, GRAY};
+Int32 FgColor = WHITE;
+Int32 BgColor = BLACK;
+int   GrayVal = 180;
 
 Set_t  *Set = NULL;
 int    S = 0;				/* Number of sets */
-double  Xmin,  Xmax,  Ymin,  Ymax;	/* range of data */
-double LXmin, LYmin, LXmax, LYmax;	/* log(range) */
-double LLXmin, LLYmin;
+double Xmin, XminXp, XminYp;		/* range of data and */
+double Ymin, YminXp, YminYp;		/* smallest positive */
+double Xmax, XmaxYp;
+double Ymax, YmaxXp;
 double OXmin, OXmax, OYmin, OYmax; 	/* Drawing range */
-int    LogX = 0;
-int    LogY = 0;
-double Tc   = 0.0;
-double Ny   = 0.0;
-double Beta = 0.0;
-double ExpX = 0.0;
-double ExpY = 0.0;
-#ifdef EXPT
-double ExpT = 1.0;
-#endif
+int    LogX  = 0;
+int    LogY  = 0;
+double Tc    = 0.0;
+double Ny    = 0.0;
+double Beta  = 0.0;
+double ExpX  = 0.0;
+double ExpY  = 0.0;
+double ExpM  = 0.0;
 int    Lines = 1;
 int    Grid  = 0;
 Int32  XSize = 400;
@@ -78,56 +82,86 @@ Int32  PXSize;
 Int32  PYSize;
 Int32  PXPos;
 Int32  PYPos;
-char   *BetaName = "Beta";
-double BetaFak = 1.0;
+/*
+  char   *BetaName = "Beta";
+  double BetaFak   = 1.0;
+  */
+char   *Names[] = {"L", "T", "M"};
 int    AutoScale = 1;
+#ifdef BEWERT
+int    ShowVar = 0;
+#endif
 double Delta = 0.1;
 Int32  MainW, PlotW;
+int    Swh, FontH, FontD;
+char   *Title = "FSScale";
+char   *Progname;
+char   *Font  = "-*-Times-Medium-R-Normal--*-120-*-*-*-*-*-*";
 
-void Usage(const char *name, int verbose) {
+double exp10(double x) {
+  return pow(10.0, x);
+}
+
+void Usage(int verbose) {
   fprintf(stderr, 
-	  "Usage: %s [-help] [-g] [-t Tc] [-n Ny] [-b Beta] [-lx] [-ly]\n",
-	  name);
+	  "Usage: %s [-help] [-t Tc] [-x x] [-y y] [-m m] [-lx] [-ly]\n"
+	  "               [-N name1,name2,name3] [-T title] [-f font] [-r]\n",
+	  Progname);
   if(verbose)
     fprintf(stderr,
-	    "       V 1.5 (C) Fred Hucht 1996\n"
+	    "       V 2.0 (C) Fred Hucht 1996\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
-	    "  1. Column:         linear dimension of the system L\n"
-	    "  2. Column:         temperature T\n"
-	    "  3. Column:         magnetisation or suszeptibility (with -g) M\n"
+	    "  1. Column:         scaling parameter, normally linear dimension\n"
+	    "                     of the system L\n"
+	    "  2. Column:         ordinate, normally temperature T\n"
+	    "  3. Column:         coordinate, normally magnetisation M\n"
+	    /*"  3. Column:         coordinate, normally magnetisation or"
+	      "                     suszeptibility (with -g) M\n"*/
 	    "\n"
-	    "X-Axis is scaled as (T - Tc) * L^x  ( x = 1/Ny )\n"
-	    "Y-Axis is scaled as  M       * L^y  ( y = Beta/Ny or y = -Gamma/Ny )\n"
+	    "X-Axis is scaled as X = (T - Tc) * L^x              ( x =    1 / ny )\n"
+	    "Y-Axis is scaled as Y =  M       * L^y * (T - Tc)^m ( y = beta / ny )\n"
+	    /*"Y-Axis is scaled as  M       * L^y  ( y = Beta/Ny or y = -Gamma/Ny )\n"*/
 	    "\n"
 	    "Options are:\n"
-	    "  -t Tc              Preset Tc\n"
-	    "  -n Ny              Preset Ny\n"
-	    "  -b Beta            Preset Beta/Gamma\n"
-	    "  -g                 Change from Ny/Beta to Ny/Gamma\n"
-	    "  -lx/-ly            Set X/Y-axis to logscale\n"
-	    "  -help              Guess...\n"
+	    "  -t Tc               Preset Tc\n"
+	    "  -x x                Preset Exponent x\n"
+	    "  -y y                Preset Exponent y\n"
+	    "  -m m                Preset Exponent m\n"
+	    /*"  -n Ny              Preset Ny\n"
+	      "  -b Beta            Preset Beta/Gamma\n"*/
+	    /*"  -g                 Change from Ny/Beta to Ny/Gamma\n"*/
+	    "  -lx/-ly             Set X/Y-axis to logscale\n"
+	    "  -N n1,n2,n3         Set names for the three columns.\n"
+	    "                      Default is L,T,M\n"
+	    "  -T title            Set window title\n"
+	    "  -f font             Use font <font>\n"
+	    "  -r                  Use reverse video\n"
+	    "  -help               Guess...\n"
 	    "\n"
 	    "Possible actions are:\n"
-	    "  left/right mouse:  Zoom in/out and disable autoscaling\n"
-	    "  middle mouse:      Enable autoscaling\n"
-	    "  Arrow left/right:  Change exponent of X-axis\n"
-	    "  Arrow up/down:     Change exponent of Y-axis\n"
-	    "  Key 'a':           Enable autoscaling\n"
-	    "  Key 'l':           Toggle drawing of lines\n"
-	    "  Key 'g':           Toggle drawing of grid\n"
-	    "  Key '1':           Set linear/linear scale\n"
-	    "  Key '2':           Set linear/log scale\n"
-	    "  Key '3':           Set log/linear scale\n"
-	    "  Key '4':           Set log/log scale\n"
-	    "  Keys 'q'/Esc:      Quit\n"
-	    "  Keys 't'/'T':      Change Tc\n"
-	    "  Keys 'x'/'X':      Change exponent of X-axis\n"
-	    "  Keys 'y'/'Y':      Change exponent of Y-axis\n"
-	    "  Keys 'n'/'N':      Change exponent Ny\n"
-	    "  Keys 'b'/'B':      Change exponent Beta(Gamma)\n"
-	    "  Keys '<'/'>':      Change change-factor d\n"
-	    , name);
+	    "  left/right mouse:   Zoom in/out and disable autoscaling\n"
+	    "  middle mouse:       Enable autoscaling\n"
+	    "  Arrow left/right:   Change exponent x\n"
+	    "  Arrow up/down:      Change exponent y\n"
+	    "  Page  up/down:      Change exponent m\n"
+	    "  Keys 'a'/'A':       Enable/disable autoscaling\n"
+	    "  Key 'r':            Reset all values\n"
+	    "  Key 'l':            Toggle drawing of lines\n"
+	    "  Key 'g':            Toggle drawing of grid\n"
+	    "  Key 's':            Save actual graph to file 'fsscale.gif'\n"
+#ifdef BEWERT
+	    "  Key 'v':            Toggle drawing of variance function\n"
+#endif
+	    "  Key 'x':            Toggle X-axis linear/log scale\n"
+	    "  Key 'y':            Toggle Y-axis linear/log scale\n"
+	    "  Keys 'q'/Esc:       Quit\n"
+	    "  Keys 't'/'T':       Change Tc\n"
+	    "  Keys 'n'/'N':       Change exponent ny\n"
+	    "  Keys 'b'/'B':       Change exponent beta\n"
+	    "  Keys '<'/'>':       Change change-factor d\n"
+	    "  Keys \"00\"-\"99\":     Activate/deactivate dataset 00-99\n"
+	    , Progname);
   exit(1);
 }
 
@@ -136,18 +170,45 @@ void GetArgs(int argc, char *argv[]) {
   extern int optind;
   extern char *optarg;
   
-  while((ch = getopt(argc, argv, "ght:n:b:l:?")) != EOF)
+  while((ch = getopt(argc, argv, "ht:x:y:m:l:vN:T:f:r?")) != EOF)
     switch(ch) {
-    case 'g':
-      BetaName = "Gamma";
-      BetaFak  = -1.0;
-      break;
+      /*
+	case 'g':
+	BetaName = "Gamma";
+	BetaFak  = -1.0;
+	break;
+	*/
     case 'h':
-      Usage(argv[0], 1);
+      Usage(1);
       break;
     case 't': Tc   = atof(optarg); break;
-    case 'n': Ny   = atof(optarg); break;
-    case 'b': Beta = atof(optarg); break;
+      /*case 'n': Ny   = atof(optarg); break;
+	case 'b': Beta = atof(optarg); break;*/
+    case 'x': ExpX = atof(optarg); break;
+    case 'y': ExpY = atof(optarg); break;
+    case 'm': ExpM = atof(optarg); break;
+    case 'v': ShowVar = 1; break;
+    case 'N':
+      /* strcpy(Names[0], strtok(optarg, ","));
+	 strcpy(Names[1], strtok(NULL,   ","));
+	 strcpy(Names[2], strtok(NULL,   ","));*/
+      Names[0] = strtok(optarg, ",");
+      Names[1] = strtok(NULL,   ",");
+      Names[2] = strtok(NULL,   ",");
+      break;
+    case 'T':
+      Title = optarg;
+      break;
+    case 'f':
+      Font = optarg;
+      break;
+    case 'r':
+      FgColor   = BLACK;
+      BgColor   = WHITE;
+      GrayVal   = 80;
+      Colors[0] = BLACK;
+      Colors[2] = BLUE;
+      break;      
     case 'l':
       if(strcmp(optarg, "x") == 0) {
 	LogX = 1; break;
@@ -156,53 +217,58 @@ void GetArgs(int argc, char *argv[]) {
 	LogY = 1; break;
       }
       if((  strcmp(optarg, "xy") == 0)
-	 ||(strcmp(optarg, "xy") == 0)) {
+	 ||(strcmp(optarg, "yx") == 0)) {
 	LogX = LogY = 1; break;
       }
       /* Nobreak */
     default:
-      Usage(argv[0], 0);
+      Usage(0);
       break;
     }
   argc -= optind;
   
-  Beta *= BetaFak;
-  ExpX  = 1.0  / Ny;
-  ExpY  = Beta * ExpX;
+  /*Beta *= BetaFak;
+    ExpX  = 1.0  / Ny;
+    ExpY  = Beta * ExpX;*/
 }
 
 void GraphInit(void) {
+  int i;
+  Device Devs[] =  {
+    KEYBD,
+    UPARROWKEY,   DOWNARROWKEY,
+    LEFTARROWKEY, RIGHTARROWKEY,
+    PAGEUPKEY,    PAGEDOWNKEY,
+    LEFTMOUSE,    MIDDLEMOUSE,    RIGHTMOUSE,
+    MOUSEX,       MOUSEY
+  };
+  
   minsize(XSize, YSize);
-  MainW = winopen("FSScale");
-  loadXfont(1, "-*-Times-Medium-R-Normal--*-120-*-*-*-*-*-*");
+  MainW = winopen(Title);
+  loadXfont(1, Font);
   font(1);
+  
+  FontH = getheight();
+  FontD = getdescender();
+  Swh   = 3 * FontH + FontH/2 + 2;
   
   /* Plot window */
   prefposition(FRAME, XSize - FRAME - 1,
-	       1+SWH, YSize - FRAME - 1);
+	       Swh,   YSize - FRAME - 1);
   PlotW = swinopen(MainW);
   doublebuffer();
   gconfig();
-  
-  qdevice(KEYBD);
-  qdevice(UPARROWKEY);
-  qdevice(DOWNARROWKEY);
-  qdevice(LEFTARROWKEY);
-  qdevice(RIGHTARROWKEY);
-  qdevice(LEFTMOUSE);
-  qdevice(MIDDLEMOUSE);
-  qdevice(RIGHTMOUSE);
+  for(i = 0; i < sizeof(Devs)/sizeof(Device); i++) qdevice(Devs[i]);
   tie(LEFTMOUSE, MOUSEX, MOUSEY);
-  qdevice(MOUSEX);
-  qdevice(MOUSEY);
-  
-  mapcolor(GRAY, 180, 180, 180);
+  mapcolor(GRAY, GrayVal, GrayVal, GrayVal);
+  font(1);
 }
 
 void ReadData(void) {
   Set_t *s;
   char buf[1024];
   double oldL = 47.11;
+  int lineno = 0;
   
   if(Set) perror("Set...");
   
@@ -212,34 +278,41 @@ void ReadData(void) {
   
   while(!feof(stdin)) {
     fgets(buf, sizeof(buf), stdin);
+    lineno++;
     if(buf[0] != '#') {
       double L, T, M;
       int n = sscanf(buf, "%lf %lf %lf", &L, &T, &M);
       if(n == 3) { /* Valid */
-#if DEBUG > 1
-	fprintf(stderr, "%lf %lf %lf\n", L, T, M);
+#if 0
+	fprintf(stdout, "%lf %lf %lf\n", L, T, M);
 #endif
 	if(L != oldL) { /* New set */
-	  oldL     = L;
+	  oldL      = L;
 	  S++;
-	  Set      = (Set_t*) realloc(Set, (S+1) * sizeof(Set_t));
-	  s        = &Set[S];
-	  s->L     = L;
-	  s->color = Colors[S % (sizeof(Colors)/sizeof(Colors[0]))];
-	  s->N     = 0;
-	  s->Data  = (Data_t*) malloc(sizeof(Data_t));
-	  /* s->A     = (double*) malloc(ASZ*sizeof(double));
-	     s->lA    = (double*) malloc(ASZ*sizeof(double)); */
+	  Set       = (Set_t*) realloc(Set, (S+1) * sizeof(Set_t));
+	  s         = &Set[S];
+	  s->L      = L;
+	  s->color  = Colors[S % (sizeof(Colors)/sizeof(Colors[0]))];
+	  s->active = 1;
+	  s->N      = 0;
+	  s->Data   = (Data_t*) malloc(sizeof(Data_t));
 	}
 	
 	s->Data = (Data_t*) realloc(s->Data, (s->N+1) * sizeof(Data_t));
 	s->Data[s->N].T = T;
 	s->Data[s->N].M = M;
 	s->N++;
+      } else if(n > 0) {
+	fprintf(stderr, "%s: Only %d column%s at line %d.\n",
+		Progname, n, n == 1 ? "" : "s", lineno);
       }
     }
   }
   S++;
+  if(S == 0) {
+    fprintf(stderr, "%s: No Data.\n", Progname);
+    exit(1);
+  }
 }
 
 void Calculate(void) {
@@ -247,12 +320,12 @@ void Calculate(void) {
   double var  = 0.0;
   double lvar = 0.0;
   
-  Xmin  = Ymin  =  1e100;
-  Xmax  = Ymax  = -1e100;
-  LXmin = LYmin =  1e100;
-  LLXmin= LLYmin=  1e100;
-  
-  for(i = 0; i < S; i++) {
+  Xmin = XminXp = XminYp = 1e100;
+  Ymin = YminXp = YminYp = 1e100;
+  Xmax = XmaxYp = 1e-100;
+  Ymax = YmaxXp = 1e-100;
+
+  for(i = 0; i < S; i++) if(Set[i].active) {
     Set_t *s  = &Set[i];
     double Lx = pow(s->L, ExpX);
     double Ly = pow(s->L, ExpY);
@@ -260,119 +333,145 @@ void Calculate(void) {
     for(j = 0; j < s->N; j++) {
       Data_t *d = &s->Data[j];
       double x  = d->x[0] = (d->T - Tc) * Lx;
-      double y  = d->x[1] =  d->M       * Ly;
+      double y  = d->x[1] =  d->M       * Ly * pow(d->T - Tc, ExpM);
       
-      d->lx[0] = log(x);
-      d->lx[1] = log(y);
+      d->lx[0] = (x > 0.0) ? log10(x) : 0.0;
+      d->lx[1] = (y > 0.0) ? log10(y) : 0.0;
       
-      if(x < Xmin) Xmin = x;
-      if(y < Ymin) Ymin = y;
-      if(x > Xmax) Xmax = x;
-      if(y > Ymax) Ymax = y;
-      if(x > 0 && x < LXmin) LXmin = x;
-      if(y > 0 && y < LYmin) LYmin = y;
-      if(x > 0 && y > 0) { /* 4 loglog plots */
-	if(x < LLXmin) LLXmin = x;
-	if(y < LLYmin) LLYmin = y;
-      }
+      if(         x < Xmin)   Xmin   = x;
+      if(x > 0 && x < XminXp) XminXp = x;
+      if(y > 0 && x < XminYp) XminYp = x;
+      if(         y < Ymin)   Ymin   = y;
+      if(x > 0 && y < YminXp) YminXp = y;
+      if(y > 0 && y < YminYp) YminYp = y;
+      if(         x > Xmax)   Xmax   = x;
+      if(y > 0 && x > XmaxYp) XmaxYp = x;
+      if(         y > Ymax)   Ymax   = y;
+      if(x > 0 && y > YmaxXp) YmaxXp = y;
+#if 0
+      fprintf(stderr,
+	      "x=%f y=%f Xmin=%f XminXp=%f XminYp=%f "
+	      "Ymin=%f YminXp=%f YminYp=%f "
+	      "Xmax=%f XmaxYp=%f "
+	      "Ymax=%f YmaxXp=%f\n",
+	      x, y,
+	      Xmin, XminXp, XminYp,
+	      Ymin, YminXp, YminYp,
+	      Xmax, XmaxYp,
+	      Ymax, YmaxXp);
+#endif
     }
   }
   
-  LXmin = log(LXmin);
-  LYmin = log(LYmin);
-  
-  LXmax = log(Xmax);
-  LYmax = log(Ymax);
-  
-  LLXmin= log(LLXmin);
-  LLYmin= log(LLYmin);
-  
-#ifdef DEBUG
-  fprintf(stderr, "%g %g %g %g  %g %g %g %g  %g %g\n",
-	  Xmin,  Xmax,  Ymin,  Ymax, 
-	  LXmin, LXmax, LYmin, LYmax,
-	  LLXmin, LLYmin);
+#if 0
+  fprintf(stderr,
+	  "Xmin=%g XminXp=%g XminYp=%g\n"
+	  "Ymin=%g YminXp=%g YminYp=%g\n"
+	  "Xmax=%g XmaxYp=%g\n"
+	  "Ymax=%g YmaxXp=%g\n",
+	  Xmin, XminXp, XminYp,
+	  Ymin, YminXp, YminYp,
+	  Xmax, XmaxYp,
+	  Ymax, YmaxXp);
 #endif
   
 #ifdef BEWERT
-  for(i = 0; i < S; i++) {
-    Set_t *s  = &Set[i];
-    
-    for(k = 0; k < ASZ * (s->Data[0].x[0] - Xmin)/(Xmax - Xmin); k++) {
-      s->A[k] = 11.11;
-    }
-    for(j = 1; j < s->N; j++) {
-      double m, y;
-      m = (s->Data[j].x[1] - s->Data[j-1].x[1])
-	/ (s->Data[j].x[0] - s->Data[j-1].x[0]);
-      y = s->Data[j-1].x[1];
+#define NODATA  4711.0815
+  if(ShowVar) {
+    for(i = 0; i < S; i++) if(Set[i].active) {
+      Set_t *s  = &Set[i];
+      double m;
+      int ja;
       
-      for(; k < ASZ * (s->Data[j].x[0] - Xmin)/(Xmax - Xmin); k++) {
-	s->A[k] = 
-	  y + m * (k * (Xmax - Xmin) / ASZ - (s->Data[j-1].x[0] - Xmin));
+      for(k = j = ja = 0; k < ASZ; k++) {
+	double x = Xmin + k * (Xmax - Xmin) / ASZ;
+	Var[k][0] = x;
+	if(x <  s->Data[0     ].x[0] ||
+	   x >= s->Data[s->N-1].x[0]) {
+	  s->A[k] = NODATA;
+	} else {
+	  if(x >= s->Data[j].x[0] && j + 1 < s->N) {
+	    ja = j;
+	    while(x >= s->Data[j].x[0] && j + 1 < s->N) j++;
+	    m = (s->Data[j].x[1] - s->Data[ja].x[1])
+	      / (s->Data[j].x[0] - s->Data[ja].x[0]);
+	  }
+	  s->A[k] = s->Data[ja].x[1] + m * (x - s->Data[ja].x[0]);
+	}
       }
-    }
-    for(; k < ASZ; k++) {
-      s->A[k] = 11.11;
-    }
-    
-    for(k = 0; k < ASZ * (s->Data[0].lx[0] - LXmin)/(LXmax - LXmin); k++) {
-      s->lA[k] = 11.11;
-    }
-    for(j = 1; j < s->N; j++) {
-      double m = (s->Data[j].lx[1] - s->Data[j-1].lx[1])
-	/        (s->Data[j].lx[0] - s->Data[j-1].lx[0]);
-      double y = s->Data[j-1].lx[1];
       
-      for(; k < ASZ * (s->Data[j].lx[0] - LXmin)/(LXmax - LXmin); k++) {
-	s->lA[k] =
-	  y + m * (k * (LXmax - LXmin) / ASZ - (s->Data[j-1].lx[0] - LXmin));
+      for(k = j = ja = 0; k < ASZ; k++) {
+	/*double x = exp(log(XminXp) + k * (log(Xmax / XminXp)) / ASZ);*/
+	double x = XminXp * pow(Xmax / XminXp, (double)k / ASZ);
+	LVar[k][0] = x;
+	if(x <  s->Data[0     ].x[0] ||
+	   x >= s->Data[s->N-1].x[0]) {
+	  s->lA[k] = NODATA;
+	} else {
+	  if(x >= s->Data[j].x[0] && j + 1 < s->N) {
+	    ja = j;
+	    while(x >= s->Data[j].x[0] && j + 1 < s->N) j++;
+	    m = (s->Data[j].x[1] - s->Data[ja].x[1])
+	      / (s->Data[j].x[0] - s->Data[ja].x[0]);
+	  }
+	  s->lA[k] = s->Data[ja].x[1] + m * (x - s->Data[ja].x[0]);
+	}
       }
     }
-    for(; k < ASZ; k++) {
-      s->lA[k] = 11.11;
-    }
-  }
-  
-  for(k = 0; k < ASZ; k++) {
-    int m    = 0;
-    int lm   = 0;
     
-    Mean[k]  = 0.0;
-    Var[k]   = 0.0;
-    LMean[k] = 0.0;
-    LVar[k]  = 0.0;
-    for(i = 0; i < S; i++) {
-      if(Set[i].A[k] != 11.11) {
-	Mean[k] += Set[i].A[k];
-	Var[k]  += Set[i].A[k] * Set[i].A[k];
-	m++;
+    for(k = 0; k < ASZ; k++) {
+      int m    = 0;
+      int lm   = 0;
+
+      Mean[k]    = 0.0;
+      Var[k][1]  = 0.0;
+      LMean[k]   = 0.0;
+      LVar[k][1] = 0.0;
+      
+      for(i = 0; i < S; i++) if(Set[i].active) {
+	if(Set[i].A[k] != NODATA) {
+	  Mean[k]   += Set[i].A[k];
+	  Var[k][1] += Set[i].A[k] * Set[i].A[k];
+	  m++;
+	}
+	/*printf("%d %g %g (%g %g)\n", i, Set[i].A[k], Mean[k],
+	  Var[k][0], Var[k][1]);*/
+	if(Set[i].lA[k] != NODATA) {
+	  LMean[k]   += Set[i].lA[k];
+	  LVar[k][1] += Set[i].lA[k] * Set[i].lA[k];
+	  lm++;
+	}
       }
-      /*printf("%d %d %g %g %g\n", i, k, Set[i].A[k], Mean[k], Var[k]);*/
-      if(Set[i].lA[k] != 11.11) {
-	LMean[k] += Set[i].lA[k];
-	LVar[k]  += Set[i].lA[k] * Set[i].lA[k];
-	lm++;
+      
+      Mean[k] /= m;
+      if(m == 1) {
+	Var[k][1] = 0.0;
+      } else {
+	Var[k][1] /= m;
+	Var[k][1] = Var[k][1] - Mean[k] * Mean[k];
+	/*Var[k] /= Mean[k]; Relative variance */
       }
-    }
-    Mean[k] /= m;
-    Var[k]  /= m;
-    Var[k]   = Var[k] - Mean[k] * Mean[k];
-    if(m == 1) Var[k] = 0.0;
-    var += Var[k];
-    
-    LMean[k] /= lm;
-    LVar[k]  /= lm;
-    LVar[k]   = LVar[k] - LMean[k] * LMean[k];
-    if(lm == 1) LVar[k] = 0.0;
-    lvar += LVar[k];
+      var += Var[k][1];
+      
+      /*Ymin = 0.0;if(Var[k] > 0 && Var[k] < YminYp) YminYp = Var[k];*/
+      
+      LMean[k]   /= lm;
+      if(lm == 1) {
+	LVar[k][1] = 0.0;
+      } else {
+	LVar[k][1] /= lm;
+	LVar[k][1]  = LVar[k][1] - LMean[k] * LMean[k];
+      }
+      lvar += LVar[k][1];
 #ifdef DEBUG
-    printf("%g %g %g %g\n", 
-	   Mean[k], Var[k], LMean[k], LVar[k]);
+      printf("%g (%g,%g) %g (%g,%g)\n", 
+	     Mean[k],  Var[k][0],  Var[k][1], 
+	     LMean[k], LVar[k][0], LVar[k][1]
+	     );
 #endif
+    }
+    /*printf("var = %g, lvar = %g\n", var / ASZ, lvar / ASZ);*/
   }
-  printf("var = %g, lvar = %g\n",
-	 var / ASZ, lvar / ASZ);
 #endif
 }
 
@@ -400,97 +499,189 @@ void DrawTickY(double y, int level) {
 
 static int VActive = 0;
 
-void bgndraw(void) {
+int bgndraw(void) {
   if(!VActive) {
+    linewidth(Lines);
     Lines ? bgnline() : bgnpoint();
     VActive = 1;
+    return 1;
+  } else {
+    return 0;
   }
 }
 
 void enddraw(void) {
   if(VActive) {
     Lines ? endline() : endpoint();
+    linewidth(1);
     VActive = 0;
   }
 }
 
+struct Ticks_ {
+  double t0, t1;
+  int    l0, l1;
+};
+
+void CalcTicks(struct Ticks_* t, int Log, double d) {
+  const double x[][2] = {{1.0, 0.1},{2.0, 1.0}, {5.0, 1.0}};
+  double l10, fl10;
+  int i;
+  l10  = log10(d) - 0.5;
+  fl10 = floor(l10);
+  i = (int)(3.0 * (l10 - fl10));
+  t->t0 = x[i][0] * exp10(fl10);
+  t->t1 = x[i][1] * exp10(fl10);
+  t->l0 = 0;
+  t->l1 = 0;
+  if(Log) {
+    if(t->t0 < 2.0) {
+      t->l1 = 1;
+      t->t1 = log10(x[i][1]) * exp10(fl10);
+    }
+    /*if(t->t0 < 1.0) {
+      t->l0 = 1;
+      t->t0 = log10(x[i][0]) * exp10(fl10);
+      }*/
+  }
+#if 0
+  fprintf(stderr, "%g %g %d %d\n",
+	  Log ? exp10(t->t0) : t->t0,
+	  Log ? exp10(t->t1) : t->t1,
+	  t->l0, t->l1);
+#endif
+
+}
+
+void charstrH(char * text, int h) {
+  Screencoord cx, cy;
+  getcpos(&cx, &cy);
+  cx -= XPos; cy -= YPos;
+  cmov2i (cx, cy + h);
+  charstr(text);
+  cx += strwidth(text);
+  cmov2i (cx, cy);
+}    
+
 void Draw(void) {
   int i, j;
-  char text[256];
-  double tdx, tdy, x, y;
+  char tmtc[80], text[256];
+  double x, y;
+  struct Ticks_ tx, ty;
+  double dxmin, dxmax, dymin, dymax;
   
   winset(MainW);
-  color(BLACK);
+  color(BgColor);
   clear();
   
-  cmov2(FRAME, SWH - getheight());
-  sprintf(text, "d = %g, Tc = %g, Ny = %g, %s = %g X = %g Y = %g",
-	  Delta, Tc, Ny, BetaName, BetaFak * Beta, ExpX, ExpY);
-  color(WHITE);
-  charstr(text);
-  cmov2(FRAME, SWH - 2 * getheight());
-  charstr("L = ");
+  color(FgColor);
+  cmov2(FRAME, 2 * FontH + FontD);
+  /*sprintf(text, "d = %g, Tc = %g, Ny = %g, %s = %g, X = %g, Y = %g",
+    Delta, Tc, Ny, BetaName, BetaFak * Beta, ExpX, ExpY);*/
+  
+  if(Tc) sprintf(tmtc, "(%s%+g)", Names[1], -Tc);
+  else   sprintf(tmtc, "%s",      Names[1]);
+  
+  sprintf(text, "d = %g; X = %s", Delta, tmtc); charstr (text);
+  if(ExpX) {
+    sprintf(text, " * %s", Names[0]); charstr (text);
+    if(fabs(ExpX - 1.0) > 1e-8) {
+      sprintf(text, "%g",  ExpX);     charstrH(text, FontH/2);
+    }
+  }
+  sprintf(text, "; Y = %s", Names[2]); charstr(text);
+  if(ExpM) {
+    sprintf(text, " * %s", tmtc);     charstr(text);
+    if(fabs(ExpM - 1.0) > 1e-8) {
+      sprintf(text, "%g",  ExpM);     charstrH(text, FontH/2);
+    }
+  }
+  if(ExpY) {
+    sprintf(text, " * %s", Names[0]); charstr (text);
+    if(fabs(ExpY - 1.0) > 1e-8) {
+      sprintf(text, "%g",  ExpY);     charstrH(text, FontH/2);
+    }
+  }
+  
+  cmov2(FRAME, FontH + FontD);
+  sprintf(text, "%s = ", Names[0]); charstr(text);
 
   winset(PlotW);
   
   if(AutoScale) {
-    OXmin = LogX ? LXmin : Xmin;
-    OXmax = LogX ? LXmax : Xmax;
-    OYmin = LogY ? LYmin : Ymin;
-    OYmax = LogY ? LYmax : Ymax;
-    if(LogX && LogY) {
-      OXmin = LLXmin;
-      OYmin = LLYmin;
-    }
-    OXmin -= 0.05 * (OXmax - OXmin);
-    OXmax += 0.05 * (OXmax - OXmin);
-    OYmin -= 0.05 * (OYmax - OYmin);
-    OYmax += 0.05 * (OYmax - OYmin);
+    double dx, dy;
+    OXmin = LogX ? log10(XminXp) : LogY ? XminYp : Xmin;
+    OYmin = LogY ? log10(YminYp) : Ymin;
+    OXmax = LogY ? XmaxYp : Xmax; if(LogX) OXmax = log10(OXmax);
+    OYmax = LogX ? YmaxXp : Ymax; if(LogY) OYmax = log10(OYmax);
+    
+    dx = OXmax - OXmin;
+    dy = OYmax - OYmin;
+    OXmin -= 0.05 * dx;
+    OXmax += 0.05 * dx;
+    OYmin -= 0.05 * dy;
+    OYmax += 0.05 * dy;
   }
   
-#ifdef DEBUG
+#if 0
   fprintf(stderr, "%g %g %g %g\n", OXmin, OXmax, OYmin, OYmax);
 #endif
   
   ortho2(OXmin, OXmax, OYmin, OYmax);
   
-  color(BLACK);
+  dxmin = OXmin - 10 * (OXmax - OXmin);
+  dxmax = OXmax + 10 * (OXmax - OXmin);
+  dymin = OYmin - 10 * (OYmax - OYmin);
+  dymax = OYmax + 10 * (OYmax - OYmin);
+  
+  color(BgColor);
   clear();
   color(GRAY);
   rect(OXmin, OYmin, OXmax, OYmax);
-
-  tdx = LogX ? log(10.0) : pow(10, floor(log(OXmax - OXmin)/log(10.0)));
-  tdy = LogY ? log(10.0) : pow(10, floor(log(OYmax - OYmin)/log(10.0)));
   
-#ifdef DEBUG
-  fprintf(stderr, "%g %g\n", tdx, tdy);
-#endif
+  CalcTicks(&tx, LogX, OXmax - OXmin);
+  CalcTicks(&ty, LogY, OYmax - OYmin);
   
-  for(x = tdx * floor(OXmin / tdx); x < OXmax; x += tdx) { 
+  /*tdx = LinearTickD(OXmax - OXmin);
+    tdy = LinearTickD(OYmax - OYmin);*/
+    
+  for(x = tx.t0 * floor(OXmin / tx.t0);
+      x < OXmax;
+      x = tx.l0 ? log10(exp10(x) + exp10(tx.t0)) : x + tx.t0) { 
     double xx;
+    if(fabs(x / tx.t0) < 1e-10) x = 0.0;
     color(GRAY);
-    for(xx = x; xx < x + tdx; 
-	xx = LogX ? log(exp(xx) + exp(x)) : xx + 0.2 * tdx) { 
+    for(xx = x; xx < x + tx.t0; 
+	xx = tx.l1 ? log10(exp10(xx) + exp10(x)) : xx + tx.t1) { 
       DrawTickX(xx, 1);
     }
     color(GRAY);
     DrawTickX(x, 0);
-    sprintf(text, LogX ? "%.4g" : "%g", LogX ? exp(x) : x);
-    color(WHITE);
+    if(LogX == tx.l0) {
+      sprintf(text, "%g", x); /*printf(       "%g\n", x);*/
+    } else {
+      sprintf(text, "%.3g", exp10(x));/*printf(       "%.3g\n", exp10(x));*/
+    }
+    color(FgColor);
     cmov2(x, OYmin); charstr(text);
   }
   
-  for(y = tdy * floor(OYmin / tdy); y < OYmax; y += tdy) {
+  for(y = ty.t0 * floor(OYmin / ty.t0); y < OYmax; y += ty.t0) {
     double yy;
+    if(fabs(y / ty.t0) < 1e-10) y = 0.0;
     color(GRAY);
-    for(yy = y; yy < y + tdy;
-	yy = LogY ? log(exp(yy) + exp(y)) : yy + 0.2 * tdy) { 
+    for(yy = y; yy < y + ty.t0;
+	yy = ty.l1 ? log10(exp10(yy) + exp10(y)) : yy + ty.t1) { 
       DrawTickY(yy, 1);
     }
     color(GRAY);
     DrawTickY(y, 0);
-    sprintf(text, LogY ? "%.4g" : "%g", LogY ? exp(y) : y);
-    color(WHITE);
+    if(LogY == ty.l0) {
+      sprintf(text, "%g", y); /*printf("%g\n", y);*/
+    } else {
+      sprintf(text, "%.3g", exp10(y));/*printf("%.3g\n", exp10(y));*/
+    }
+    color(FgColor);
     cmov2(OXmin, y); charstr(text);
     color(GRAY);
   }
@@ -500,83 +691,95 @@ void Draw(void) {
     
     winset(MainW);
     color(s->color);
-    sprintf(text, " %g", s->L);
+    sprintf(text, s->active ? " %.4g" : " (%.4g)", s->L);
     charstr(text);
     
     winset(PlotW);
-    color(s->color);
-    
-    for(j = 0; j < s->N; j++) {
-      Data_t *d = &s->Data[j];
-      double x[2];
+    if(s->active) {
+      color(s->color);
       
-      if(LogX && (d->x[0] <= 0.0) ||
-	 LogY && (d->x[1] <= 0.0)) {
+      for(j = 0; j < s->N; j++) {
+	Data_t *d = &s->Data[j];
+	double x[2];
+	x[0] = LogX ? d->lx[0] : d->x[0];
+	x[1] = LogY ? d->lx[1] : d->x[1];
+	
+	if((LogX && (d->x[0] <= 0.0)) ||
+	   (LogY && (d->x[1] <= 0.0)) ||
+	   x[0] < dxmin || x[0] > dxmax ||
+	   x[1] < dymin || x[1] > dymax) {
+	  /* Point is not a number or too far away, don't draw */
+	  enddraw();
+	} else {
+	  /* All OK */
+	  if(bgndraw()) v2d(x); /* Draw at least one point */
+	  v2d(x);
+	}
+      }
+      enddraw();
+#ifdef SHOWA
+      for(k = 0; k < ASZ; k++) {
+	double x[2];
+	x[0] = Var[k][0];
+	x[1] = Set[i].A[k];
+	
+	if(LogX && (x[0] <= 0.0) ||
+	   LogY && (x[1] <= 0.0) ||
+	   x[1] == NODATA) {
+	  /* Point is not a number, don't draw */
+	  enddraw();
+	} else {
+	  x[0] = LogX ? log10(x[0]) : x[0];
+	  x[1] = LogY ? log10(x[1]) : x[1];
+	  bgndraw();
+	  v2d(x);
+	}
+      }
+      enddraw();
+#endif
+    }
+  }
+  
+#ifdef BEWERT
+  if(ShowVar) {
+    int k, l;
+    color(RED);
+    for(k = l = 0; k < ASZ || l < ASZ;) {
+      double x[2];
+      if(((Var[k][0] < LVar[l][0]) && k < ASZ) || l >= ASZ) {
+	x[0] = Var[k][0];
+	x[1] = Var[k][1];
+	k++;
+      } else {
+	x[0] = LVar[l][0];
+	x[1] = LVar[l][1];
+	l++;
+      }
+      
+      if((LogX && (x[0] <= 0.0)) ||
+	 (LogY && (x[1] <= 0.0))) {
 	/* Point is not a number, don't draw */
 	enddraw();
       } else {
-	/* All OK */
-	x[0] = LogX ? d->lx[0] : d->x[0];
-	x[1] = LogY ? d->lx[1] : d->x[1];
+	x[0] = LogX ? log10(x[0]) : x[0];
+	x[1] = LogY ? log10(x[1]) : x[1];
 	bgndraw();
 	v2d(x);
       }
     }
     enddraw();
   }
-  
-#ifdef BEWERT
-  color(RED);
-  bgndraw();
-  for(j = 0; j < ASZ; j++) {
-    double x[2];
-    x[0] = Xmin + j * (Xmax - Xmin) / ASZ;
-    x[1] = Var[j];
-    
-    if(LogX && (x[0] <= 0.0) ||
-       LogY && (x[1] <= 0.0)) {
-      /* Point is not a number, don't draw */
-      enddraw();
-    } else {
-      x[0] = LogX ? log(x[0]) : x[0];
-      x[1] = LogY ? log(x[1]) : x[1];
-      bgndraw();
-      v2d(x);
-    }
-  }
-  enddraw();
-  
-  color(YELLOW);
-  bgndraw();
-  for(j = 0; j < ASZ; j++) {
-    double x[2];
-    x[0] = LXmin + j * (LXmax - LXmin) / ASZ;
-    x[1] = LVar[j];
-    if(LogY && (x[1] <= 0.0)) {
-      /* Point is not a number, don't draw */
-      enddraw();
-    } else {
-      x[0] = LogX ? x[0] : exp(x[0]);
-      x[1] = LogY ? log(x[1]) : x[1];
-      bgndraw();
-      v2d(x);
-    }
-  }
-  enddraw();
 #endif
-  
   swapbuffers();
 }
 
 void ShowPos(Int16 mx, Int16 my, Int16 showpos) {
   static char text[] = "                              ";
-  static int cy = -1;
   double x, y;
   
   winset(MainW);
-  if(cy == -1) cy = SWH - 3 * getheight();
-  color(BLACK);
-  cmov2(FRAME, cy);
+  color(BgColor);
+  cmov2(FRAME, FontD);
   charstr(text);
   if(showpos) {
     x = OXmin + (OXmax - OXmin) * (double)(mx - PXPos) / PXSize;
@@ -588,16 +791,16 @@ void ShowPos(Int16 mx, Int16 my, Int16 showpos) {
 	   mx - PXPos, my - PYPos,
 	   x, y);
 #endif
-    color(WHITE);
+    color(FgColor);
     sprintf(text, "P = {%g, %g}", 
-	    LogX ? exp(x) : x,
-	    LogY ? exp(y) : y);
-    cmov2(FRAME, cy);
+	    LogX ? exp10(x) : x,
+	    LogY ? exp10(y) : y);
+    cmov2(FRAME, FontD);
     charstr(text);
   }
 }
 
-void Selector(double*xmin, double*xmax, double*ymin, double*ymax) {
+int Selector(double*xmin, double*xmax, double*ymin, double*ymax) {
   Int32 ox, oy;
   Int32 sx, sy;
   Int16 mx, my;
@@ -614,15 +817,15 @@ void Selector(double*xmin, double*xmax, double*ymin, double*ymax) {
   getviewport(&vl, &vr, &vb, &vt);
   
   getmatrix(M);
-  ol = (-1.0-M[3][0])/M[0][0];
-  or = ( 1.0-M[3][0])/M[0][0];
-  ob = (-1.0-M[3][1])/M[1][1];
-  ot = ( 1.0-M[3][1])/M[1][1];
+  ol = (-1.0-M[3][0]) / M[0][0];
+  or = ( 1.0-M[3][0]) / M[0][0];
+  ob = (-1.0-M[3][1]) / M[1][1];
+  ot = ( 1.0-M[3][1]) / M[1][1];
   
   qread(&mx); mx -= ox;
   qread(&my); my -= oy;
   
-  if(mx < vl || mx > vr || my < vb || my > vt) return; /* Not in viewport */
+  if(mx < vl || mx > vr || my < vb || my > vt) return 0; /* Not in viewport */
   
   r1x = ol + (or - ol) * (double)(mx - vl) / (vr - vl);
   r1y = ob + (ot - ob) * (double)(my - vb) / (vt - vb);
@@ -637,7 +840,7 @@ void Selector(double*xmin, double*xmax, double*ymin, double*ymax) {
 #endif
   
   frontbuffer(1);
-  color(0);
+  color(2);
   logicop(LO_XOR);
   
   do {
@@ -664,12 +867,13 @@ void Selector(double*xmin, double*xmax, double*ymin, double*ymax) {
   frontbuffer(0);
   logicop(LO_SRC);
   
-  if(r1x == r2x || r1y == r2y) return; /* Do nothing */
+  if(r1x == r2x || r1y == r2y) return 0; /* Do nothing */
     
   *xmin = MIN(r1x, r2x);
   *xmax = MAX(r1x, r2x);
   *ymin = MIN(r1y, r2y);
   *ymax = MAX(r1y, r2y);
+  return 1;
 }
 
 void ProcessQueue(void) {
@@ -684,7 +888,7 @@ void ProcessQueue(void) {
   
   dev = qread(&val);
   
-#ifdef DEBUG
+#if 0
   printf("%d %d\n", dev, val);
 #endif
   
@@ -703,10 +907,11 @@ void ProcessQueue(void) {
     break;
   case LEFTMOUSE:
     if(val == 1) {
-      AutoScale = 0;
       winset(PlotW);
-      Selector(&OXmin, &OXmax, &OYmin, &OYmax);
-      rd = 1;
+      if(Selector(&OXmin, &OXmax, &OYmin, &OYmax)) {
+	AutoScale = 0;
+	rd = 1;
+      }
     }
     break;
   case MIDDLEMOUSE:
@@ -742,7 +947,7 @@ void ProcessQueue(void) {
     
     winset(PlotW);
     winposition(FRAME, XSize - FRAME - 1,
-		1+SWH, YSize - FRAME - 1);
+		Swh,   YSize - FRAME - 1);
     reshapeviewport();
     getsize(&PXSize, &PYSize); 	/* Size of plot window */
     getorigin(&PXPos, &PYPos); 	/* Origin of plot window */
@@ -759,31 +964,46 @@ void ProcessQueue(void) {
   case    UPARROWKEY: if(val) {ExpY += Delta; ZCHECK(ExpY); XY = 1;} break;
   case  LEFTARROWKEY: if(val) {ExpX -= Delta; ZCHECK(ExpX); XY = 1;} break;
   case RIGHTARROWKEY: if(val) {ExpX += Delta; ZCHECK(ExpX); XY = 1;} break;
+  case     PAGEUPKEY: if(val) {ExpM += Delta; ZCHECK(ExpM); XY = 1;} break;
+  case   PAGEDOWNKEY: if(val) {ExpM -= Delta; ZCHECK(ExpM); XY = 1;} break;
+    
   case KEYBD:
-    switch(val) {
+    if(val >= '0' && val <= '9') {
+      Int16 val2;
+      val = 10 * (val - '0') - '0';
+      if(KEYBD == qread(&val2) && val + val2 < S) {
+	Set[val + val2].active ^= 1;
+	rc = 1;
+      }
+    } else switch(val) {
     case 'a': AutoScale = 1;               rd = 1; break;
+    case 'A': AutoScale = 0;                       break;
+    case 'r': ExpX = ExpY = ExpM = Tc = 0; XY = 1; break;
     case 't': Tc   += Delta; ZCHECK(Tc  ); rc = 1; break;
     case 'T': Tc   -= Delta; ZCHECK(Tc  ); rc = 1; break;
+#if 0
     case 'x': ExpX += Delta; ZCHECK(ExpX); XY = 1; break;
     case 'X': ExpX -= Delta; ZCHECK(ExpX); XY = 1; break;
     case 'y': ExpY += Delta; ZCHECK(ExpY); XY = 1; break;
     case 'Y': ExpY -= Delta; ZCHECK(ExpY); XY = 1; break;
-#ifdef EXPT
-    case 'o': ExpT += Delta; ZCHECK(ExpT); XY = 1; break;
-    case 'O': ExpT -= Delta; ZCHECK(ExpT); XY = 1; break;
 #endif
     case 'n': Ny   += Delta; ZCHECK(Ny  ); XY = 2; break;
     case 'N': Ny   -= Delta; ZCHECK(Ny  ); XY = 2; break;
     case 'b': Beta += Delta; ZCHECK(Beta); XY = 2; break;
     case 'B': Beta -= Delta; ZCHECK(Beta); XY = 2; break;
-    case 'l': Lines = 1 - Lines; rd = 1; break;
-    case 'g': Grid  = 1 - Grid;  rd = 1; break;
+    case 'l': Lines = (Lines + 1) % 3; rd = 1; break;
+    case 'g': Grid    ^= 1; rd = 1; break;
+    case 'v': ShowVar ^= 1; rc = 1; break;
     case '<': Delta *= 0.1; rd = 1; break;
     case '>': Delta *= 10.; rd = 1; break;
-    case '1': AutoScale = 1; LogX = 0; LogY = 0; rd = 1; break;
-    case '2': AutoScale = 1; LogX = 0; LogY = 1; rd = 1; break;
+    case 'x': AutoScale = 1; LogX ^= 1; rd = 1; break;
+    case 'y': AutoScale = 1; LogY ^= 1; rd = 1; break;
+    case 'i': logicop(LO_NSRC); break;
+    case 's': gl2ppm("| ppmtogif > fsscale.gif"); break;
+#if 0
     case '3': AutoScale = 1; LogX = 1; LogY = 0; rd = 1; break;
     case '4': AutoScale = 1; LogX = 1; LogY = 1; rd = 1; break;
+#endif
     case 'q':
     case '\033': exit(0); break;
     }
@@ -803,9 +1023,6 @@ void ProcessQueue(void) {
   }
   
   if(rc) {
-#ifdef EXPT
-    printf("ExpT = %g\n", ExpT);
-#endif
     Calculate();
     rd = 1;
   }
@@ -817,10 +1034,12 @@ void ProcessQueue(void) {
 }
 
 int main(int argc, char *argv[]) {
+  signal(SIGFPE, SIG_IGN); /* 4 Linux */
+  Progname = argv[0];
   Ny = 1.0 / ExpX;
   GetArgs(argc, argv);
-  GraphInit();
   ReadData();
+  GraphInit();
   Calculate();
   while(1) ProcessQueue();
 }
