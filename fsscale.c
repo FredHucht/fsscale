@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995-2002
  *
- * $Id: fsscale.c,v 2.62 2002-08-15 16:08:38+02 fred Exp fred $
+ * $Id: fsscale.c,v 2.63 2002-11-29 14:31:01+01 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.63  2002-11-29 14:31:01+01  fred
+ * Many changes: Lys, Minor grid, text resorted, ...
+ *
  * Revision 2.62  2002-08-15 16:08:38+02  fred
  * Also save ReduceT
  *
@@ -198,7 +201,7 @@
  */
 /*#pragma OPTIONS inline+Pow*/
 
-char   *RCSId = "$Id: fsscale.c,v 2.62 2002-08-15 16:08:38+02 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.63 2002-11-29 14:31:01+01 fred Exp fred $";
 
 /* Note: AIX: Ignore warnings "No function prototype given for 'finite'"
  * From math.h:
@@ -494,7 +497,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.62 $ (C) Fred Hucht 1995-2002\n"
+	    "$Revision: 2.63 $ (C) Fred Hucht 1995-2002\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension L\n"
@@ -2059,7 +2062,10 @@ void ProcessQueue(NumParams *p, GraphParams *g) {
       }
       todo = ReWr;
       break;
-    case 's': gl2ppm("| ppmtogif > fsscale.gif"); break;
+    case 's': 
+      winset(g->MainW);
+      gl2ppm("| ppmtogif > fsscale.gif");
+      break;
     case 'Q': ReadVars(p); todo = ReCa; break;
     case 'W': WriteVars(p);             break;
     case 'p': g->RemoveFiles = 1; rewrite = write_all(1, rewrite); break;
