@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995-1998
  *
- * $Id: fsscale.c,v 2.40 2000-01-04 13:38:20+01 fred Exp fred $
+ * $Id: fsscale.c,v 2.41 2000/01/11 15:47:53 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.41  2000/01/11 15:47:53  fred
+ * Added finite() to checked_v2d
+ *
  * Revision 2.40  2000-01-04 13:38:20+01  fred
  * Added variance prefactor ('f'/'F')
  *
@@ -128,7 +131,7 @@
  */
 /*#pragma OPTIONS inline+Pow*/
 
-char   *RCSId = "$Id: fsscale.c,v 2.40 2000-01-04 13:38:20+01 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.41 2000/01/11 15:47:53 fred Exp fred $";
 
 #include <X11/Ygl.h>
 #include <stdio.h>
@@ -263,6 +266,7 @@ typedef struct GraphParams_ {
   int   ShowVar;
   struct CPos cpos[ALast];
   int   ShowZero;
+  int   ShowNuBeta;
 } GraphParams;
 
 const GraphParams *Gp;
@@ -307,7 +311,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.40 $ (C) Fred Hucht 1995-1998\n"
+	    "$Revision: 2.41 $ (C) Fred Hucht 1995-1998\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
@@ -371,6 +375,7 @@ void Usage(int verbose) {
 	    "  Keys 'u'|'U':       Change exponent u:       u -=|+= d\n"
 	    "  Keys 'n'|'N':       Change exponent ny:     ny -=|+= d (ny   = 1/x)\n"
 	    "  Keys 'b'|'B':       Change exponent beta: beta -=|+= d (beta = y/x)\n"
+	    "  Key  '#':           Toggle L^x, L^y vs. L^1/nu, L^beta/nu\n"
 	    "\n"
 	    "  left|right mouse:   Zoom in|out and disable autoscaling\n"
 	    "  middle mouse:       Enable autoscaling (default)\n"
@@ -972,7 +977,22 @@ void WriteTerm(const NumParams *p, GraphParams *g,
       break;
     case 2: /* X */
       if (all || Vars[ax] != 1.0 || CI(ax)) {
-	sprintf(text, "#%c%g#0", CI(ax) + '0', Vars[ax]);
+	if (g->ShowNuBeta) switch (ax) {
+	case AX:
+	  sprintf(text, "1/#%c%g#0",
+		  CI(AX) + '0', 1/p->X);
+	  break;
+	case AY:
+	  sprintf(text, "#%c%g#0/#%c%g#0",
+		  CI(AY) + '0', p->Y/p->X,
+		  CI(AX) + '0', 1/p->X);
+	  break;
+	default:
+	  sprintf(text, "#%c%g#0", CI(ax) + '0', Vars[ax]);
+	  break;
+	} else {
+	  sprintf(text, "#%c%g#0", CI(ax) + '0', Vars[ax]);
+	}
 	charstrP(text, g->FontH/2, &g->cpos[ax]);
 	g->Labi[xy] += sprintf(g->Lab[xy] + g->Labi[xy], "\\S%g\\N", Vars[ax]);
       }
@@ -1686,6 +1706,7 @@ void ProcessQueue(NumParams *p, GraphParams *g) {
     case 'N': p->Ny -= p->d; INTCHECK(p->Ny); todo = ReCaBN; break;
     case 'b': p->Beta+=p->d; INTCHECK(p->Beta);todo= ReCaBN; break;
     case 'B': p->Beta-=p->d; INTCHECK(p->Beta);todo= ReCaBN; break;
+    case '#': g->ShowNuBeta ^= 1;            todo = ReMa; break;
       
     case 'l': g->Lines = (g->Lines + 1) % 3; todo = ReWr; break;
     case 'g': g->Grid ^= 1;                  todo = ReWr; break;
