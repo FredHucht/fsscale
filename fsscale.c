@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995, 1996
  *
- * $Id: fsscale.c,v 2.19 1997/03/12 15:08:45 michael Exp michael $
+ * $Id: fsscale.c,v 2.20 1997/03/12 15:34:47 michael Exp michael $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.20  1997/03/12 15:34:47  michael
+ * namen für gnuplot outputfiles überarbeitet.
+ *
  * Revision 2.19  1997/03/12 15:08:45  michael
  * added 'P' key for static datafiles for gnuplot output
  *
@@ -180,7 +183,7 @@ int    Swh, FontH, FontD;
 char   *Title = "FSScale";
 char   *Progname;
 char   *Font  = "-*-Times-Medium-R-Normal--*-120-*-*-*-*-*-*";
-char   *RCSId = "$Id: fsscale.c,v 2.19 1997/03/12 15:08:45 michael Exp michael $";
+char   *RCSId = "$Id: fsscale.c,v 2.20 1997/03/12 15:34:47 michael Exp michael $";
 
 #define NUMACTIVE (sizeof(Variables)/sizeof(Variables[0]))
 double dummy = 0.0, *Variables[] = {
@@ -231,7 +234,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.19 $ (C) Fred Hucht 1995, 1996\n"
+	    "$Revision: 2.20 $ (C) Fred Hucht 1995, 1996\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
@@ -1423,7 +1426,7 @@ void gnuplot(int flag) {
   FILE *gpfile;
   int i, j, first;
   static plotting = 0;
-  char gpfname[256];
+  static char gpfname[256] = "";
   char *styles[] = { "points", "lines", "linespoints" };
 
   if (!(flag || plotting)) return; /* flag == 1 when 'p' was pressed
@@ -1436,8 +1439,10 @@ void gnuplot(int flag) {
   color(FgColor); rectfi(0,0,2,2); sleep(0);
   plotting = 1;
   replot = 0;
-  sprintf(gpfname, "%s.%d.X", GNUPLOTFILE, (int)(starttime - 851472000));
-  mkstemp(gpfname);
+  if (gpfname[0] == 0) {
+    sprintf(gpfname, "%s.%d.X", GNUPLOTFILE, (int)(starttime - 851472000));
+    mkstemp(gpfname);
+  }
   if ((gpfile = fopen(gpfname, "w")) == NULL) {
     perror(gpfname);
     return;
