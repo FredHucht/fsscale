@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995-2002
  *
- * $Id: fsscale.c,v 2.63 2002-11-29 14:31:01+01 fred Exp fred $
+ * $Id: fsscale.c,v 2.64 2002-12-04 11:26:13+01 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.64  2002-12-04 11:26:13+01  fred
+ * Fixed 's'
+ *
  * Revision 2.63  2002-11-29 14:31:01+01  fred
  * Many changes: Lys, Minor grid, text resorted, ...
  *
@@ -201,7 +204,7 @@
  */
 /*#pragma OPTIONS inline+Pow*/
 
-char   *RCSId = "$Id: fsscale.c,v 2.63 2002-11-29 14:31:01+01 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.64 2002-12-04 11:26:13+01 fred Exp fred $";
 
 /* Note: AIX: Ignore warnings "No function prototype given for 'finite'"
  * From math.h:
@@ -295,10 +298,12 @@ typedef struct NumParams_ {
   double Ny;
   double Beta;
   char  *VarsFile;
+  char   Command[1024];
   double VarFactor;
+  int    L0_only_in_log;
   double Vardummy,
     /**/d, L0, Xf, Tc, Z, Lz, Lc, X, Dx, Lx, LLx, Lxsf, Xs, Lxs, Yf, Mc, U, Du, Y, Dy, Ly, LLy, M, Lm, Lysf, Ys, Lys;
-  double ReduceT; /* Must be behind Vars for Read/WriteVars */
+  double ReduceT; /* Must be behind Vars for Read/WriteParams */
 } NumParams;
 enum ActiveNames {
 #define ActiveDefaults /* see start of main() */ \
@@ -355,9 +360,9 @@ typedef struct GraphParams_ {
   int   Grid;
   int   RemoveFiles;
   Int32 XSize,  YSize;
-  char  *Title;
+  char  Title[256];
   char  *Font;
-  char  *Names[4];
+  char  Names[4][256];
   const double LevelLen[2];
   int   ShiftKey, AltKey, LeftMouse;
   int   Actives[ALast];
@@ -414,7 +419,7 @@ double exp10(double x) {
   return exp(M_LN10 * x);
 }
 
-void WriteVars(const NumParams *p) {
+void WriteParams(const NumParams *p, const GraphParams *g) {
   const double *Vars = &p->Vardummy;
   int a, n = 0, fail = 0;
   FILE *tn = NULL;
@@ -446,6 +451,36 @@ void WriteVars(const NumParams *p) {
     fail = 1;
   }
   
+  if (g->Title[0] != '\0') {
+    fprintf(tn, "title = %s\n", g->Title);
+    n++;
+  }
+  
+  if (p->Command[0] != '\0') {
+    fprintf(tn, "cmd = %s\n", p->Command);
+    n++;
+  }
+  
+  for (a = 0; a < 3; a++) if (g->Names[a][0] != '\0') {
+    fprintf(tn, "name%d = %s\n", a, g->Names[a]);
+    n++;
+  }
+  
+  if (p->LogX == 1) {
+    fprintf(tn, "logx = 1\n");
+    n++;
+  }
+  
+  if (p->LogY == 1) {
+    fprintf(tn, "logy = 1\n");
+    n++;
+  }
+  
+  if (p->L0_only_in_log == 1) {
+    fprintf(tn, "l0onlyinlog = 1\n");
+    n++;
+  }
+  
   for (a = 1; a < sizeof(Defaults) / sizeof(Defaults[0]); a++) {
     struct Defaults_ *def = &Defaults[a];
     if (def->val != Vars[a]) {
@@ -459,21 +494,41 @@ void WriteVars(const NumParams *p) {
   }
 }
 
-void ReadVars(NumParams *p) {
+void ReadParams(NumParams *p, GraphParams *g) {
   double *Vars = &p->Vardummy;
   int a;
   FILE *tn;
   tn = fopen(p->VarsFile, "r");
   if (tn) {
-    while (!feof(tn)) {
+    char line[1024];
+    while (fgets(line, sizeof(line), tn)) {
       char name[128];
-      double val;
-      if (2 == fscanf(tn, "%s = %lf", name, &val)) {
-	/* printf("%s == %g\n", name, val); */
-	for (a = 1; a < sizeof(Defaults) / sizeof(Defaults[0]); a++) {
-	  if (strcmp(name, Defaults[a].name) == 0) {
-	    Vars[a] = val;
-	  }
+      char val[1024];
+      sscanf(line, "%s = %[^\n]", name, val);
+      
+      if (strcmp(name, "title") == 0) {
+	strcpy(g->Title, val);
+	if (g->MainW) {
+	  winset(g->MainW);
+	  wintitle(g->Title);
+	}
+      } else if (strcmp(name, "cmd") == 0) {
+	strcpy(p->Command, val);
+      } else if (strncmp(name, "name", 4) == 0
+		 && name[4] >= '0'
+		 && name[4] <= '3') {
+	strcpy(g->Names[name[4] - '0'], val);
+      } else if (strcmp(name, "logx") == 0) {
+	p->LogX = atoi(val);
+      } else if (strcmp(name, "logy") == 0) {
+	p->LogY = atoi(val);
+      } else if (strcmp(name, "l0onlyinlog") == 0) {
+	p->L0_only_in_log = atoi(val);
+      }
+      
+      for (a = 1; a < sizeof(Defaults) / sizeof(Defaults[0]); a++) {
+	if (strcmp(name, Defaults[a].name) == 0) {
+	  Vars[a] = atof(val);
 	}
       }
     }
@@ -485,7 +540,7 @@ void ReadVars(NumParams *p) {
 
 void Usage(int verbose) {
   fprintf(stderr, 
-	  "Usage: %s [-h] [-p <varsfile>]\n"
+	  "Usage: %s [-h] [-p <varsfile>] [-c <command>]\n"
 	  "               [-t <Tc>] [-x <x>] [-y <y>] [-m <m>] [-lx] [-ly]\n"
 	  "               [-N <name1,name2,name3>] [-T <title>] [-f <font>] [-r]\n"
 	  "               [-A <i1,...,in> ] [-4]\n"
@@ -497,9 +552,9 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.63 $ (C) Fred Hucht 1995-2002\n"
+	    "$Revision: 2.64 $ (C) Fred Hucht 1995-2002\n"
 	    "\n"
-	    "%s reads three column data from standard input.\n"
+	    "%s reads three column data from standard input or from command specified with '-c'.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension L\n"
 	    "                     of the system. Use L=0 for scaling function\n"
 	    "  2. Column:         ordinate, normally temperature T\n"
@@ -515,6 +570,7 @@ void Usage(int verbose) {
 	    "\n"
 	    "Options are:\n"
 	    "  -p <varsfile>       Read/save variables from/to file <varsfile> using key 'Q'/'W'\n"
+	    "  -c <command>        command to produce data. Will be saved to <varsfile>.\n"
 	    "  -t <Tc>             Preset Tc         (default: 0)\n"
 	    "  -x <x>              Preset Exponent x (default: 1)\n"
 	    "  -y <y>              Preset Exponent y (default: 1)\n"
@@ -614,7 +670,7 @@ void GetArgs(NumParams *p, GraphParams *g, int argc, char *argv[]) {
   p->NumRows = 3;
   g->NumActive = ALast - 3;
   
-  while ((ch = getopt(argc, argv, "ht:x:y:m:l:vN:T:f:rA:4p:?")) != EOF)
+  while ((ch = getopt(argc, argv, "ht:x:y:m:l:vN:T:f:rA:4p:c:0?")) != EOF)
     switch(ch) {
       char *ptr;
       /* case 'g':BetaName = "Gamma";BetaFak  = -1.0;break; */
@@ -629,10 +685,10 @@ void GetArgs(NumParams *p, GraphParams *g, int argc, char *argv[]) {
     case 'm': p->M_o  = p->M  = atof(optarg); break;
     case 'v': p->Bewert = g->ShowVar = 1; break;
     case 'N':
-      g->Names[0] = strtok(optarg, ",");
-      g->Names[1] = strtok(NULL,   ",");
-      g->Names[2] = strtok(NULL,   ",");
-      g->Names[3] = strtok(NULL,   ",");
+      strncpy(g->Names[0], strtok(optarg, ","), sizeof(g->Names[0]));
+      strncpy(g->Names[1], strtok(NULL,   ","), sizeof(g->Names[1]));
+      strncpy(g->Names[2], strtok(NULL,   ","), sizeof(g->Names[1]));
+      strncpy(g->Names[3], strtok(NULL,   ","), sizeof(g->Names[1]));
       break;
     case 'A':
       {
@@ -661,14 +717,17 @@ void GetArgs(NumParams *p, GraphParams *g, int argc, char *argv[]) {
       p->NumRows = 4;
       break;
     case 'T':
-      g->Title = optarg;
+      strncpy(g->Title, optarg, sizeof(g->Title));
       break;
     case 'f':
       g->Font = optarg;
       break;
     case 'p':
       p->VarsFile = optarg;
-      ReadVars(p);
+      ReadParams(p, g);
+      break;
+    case 'c':
+      strncpy(p->Command, optarg, sizeof(p->Command));
       break;
     case 'r':
       g->FgColor   = BLACK;
@@ -684,14 +743,17 @@ void GetArgs(NumParams *p, GraphParams *g, int argc, char *argv[]) {
       default:  Usage(0); break;
       }
       break;
+    case '0':
+      p->L0_only_in_log = 1;
+      break;
     default:
       Usage(0);
       break;
     }
   argc -= optind;
   
-  if (g->Names[0] == NULL || g->Names[1] == NULL ||
-      g->Names[2] == NULL || (p->NumRows == 4 && g->Names[3] == NULL)) {
+  if (g->Names[0][0] == '\0' || g->Names[1][0] == '\0' ||
+      g->Names[2][0] == '\0' || (p->NumRows == 4 && g->Names[3][0] == '\0')) {
     fprintf(stderr, "option -N requires %d comma seperated names.\n",
 	    p->NumRows);
     exit(1);
@@ -751,15 +813,29 @@ void ReadData(NumParams *p) {
   char buf[10240];
   double oldL = NODATA, oldD = NODATA;
   int lineno = 0;
+  FILE *tn;
   
-  if (p->Set) perror("Set...");
+  if (p->Command[0] != '\0') {
+    fprintf(stderr, "%s: executing '%s'\n", p->Progname, p->Command);
+    tn = popen(p->Command, "r");
+  } else {
+    tn = stdin;
+    if (isatty(fileno(tn)))
+      fprintf(stderr, "%s: reading input from terminal.\n", p->Progname);
+  }
+  
+  if (p->Set) {
+    int i;
+    for (i = 0; i < p->S; i++) free(p->Set[i].Data);
+    free(p->Set);
+  }
   
   p->Set = (Set_t*) malloc(sizeof(Set_t)); /* First set */
   p->S   = -1;
   s      = p->Set;
   
-  while (!feof(stdin)) {
-    fgets(buf, sizeof(buf), stdin);
+  while (!feof(tn)) {
+    fgets(buf, sizeof(buf), tn);
     lineno++;
     if (buf[0] != '#') {
       double L, T, M, D = 0.0;
@@ -804,6 +880,10 @@ void ReadData(NumParams *p) {
   if (p->S == 0) {
     fprintf(stderr, "%s: No Data.\n", p->Progname);
     exit(1);
+  }
+  
+  if (p->Command[0] != '\0') {
+    pclose(tn);
   }
 }
 
@@ -874,16 +954,17 @@ void Calculate(NumParams *p) {
   
   for (i = 0; i < p->S; i++) if (p->Set[i].active) {
     Set_t *s  = &p->Set[i];
-    double l, Lx, Ly, Lxs, Lys;
+    double ll, l, Lx, Ly, Lxs, Lys;
     
     if (s->L == 0) { /* scaling function */
-      l = Lx = Ly = Lxs = Lys = 0;
+      ll = l = Lx = Ly = Lxs = Lys = 0;
     } else {
-      l   = s->L / p->L0 - p->Lc;
-      Lx  = p->Xf * Pow(l, p->X + p->Dx * s->D) * PowLog(l, p->Lx) * PowLogLog(l, p->LLx);
-      Ly  = p->Yf * Pow(l, p->Y + p->Dy * s->D) * PowLog(l, p->Ly) * PowLogLog(l, p->LLy);
-      Lxs = p->Xf * p->Lxsf * Pow(l, p->Xs) * PowLog(l, p->Lxs);
-      Lys = p->Yf * p->Lysf * Pow(l, p->Ys) * PowLog(l, p->Lys);
+      ll  = s->L / p->L0 - p->Lc;
+      l   = p->L0_only_in_log ? s->L - p->Lc : ll;
+      Lx  = p->Xf * Pow(l, p->X + p->Dx * s->D) * PowLog(ll, p->Lx) * PowLogLog(ll, p->LLx);
+      Ly  = p->Yf * Pow(l, p->Y + p->Dy * s->D) * PowLog(ll, p->Ly) * PowLogLog(ll, p->LLy);
+      Lxs = p->Xf * p->Lxsf * Pow(l, p->Xs) * PowLog(ll, p->Lxs);
+      Lys = p->Yf * p->Lysf * Pow(l, p->Ys) * PowLog(ll, p->Lys);
     }
     
     for (j = 0; j < s->N; j++) {
@@ -1283,7 +1364,8 @@ void DrawMain(const NumParams *p, GraphParams *g) {
   charstrP(text, 0, &g->cpos[Ad]);
   
   if (g->ShowZero || CI(AL0) || p->L0 != 1.0) {
-    sprintf(text, "; %s /= #%c%g#0", g->Names[0], CI(AL0) + '0', p->L0);
+    sprintf(text, "; %s /= #%c%g#0%s", g->Names[0], CI(AL0) + '0', p->L0,
+	    p->L0_only_in_log ? " (only in logs)" : "");
     charstrP(text, 0, &g->cpos[AL0]);
   }
 
@@ -1744,14 +1826,14 @@ int Fit(NumParams *p) {
 void ReverseVideo(GraphParams *g) {
   static int flag = 0;
   int tmp;
-  int Col0[] = {WHITE, BLACK};
   int Col2[] = {YELLOW, BLUE};
+  int Col6[] = {WHITE, BLACK};
   int Gray[] = {180, 80};
   
   flag = 1 - flag;
   tmp = g->FgColor; g->FgColor = g->BgColor; g->BgColor = tmp;
-  g->Colors[0] = Col0[flag];
   g->Colors[2] = Col2[flag];
+  g->Colors[6] = Col6[flag];
   g->GrayVal   = Gray[flag];
   mapcolor(GRAY, g->GrayVal, g->GrayVal, g->GrayVal);
 }
@@ -1791,6 +1873,13 @@ void ProcessQueue(NumParams *p, GraphParams *g) {
   case INPUTCHANGE:
     if (val == 0) rewrite = write_all(0, rewrite);
     showpos = val == g->PlotW;
+    if (val != 0) {
+      /* reinit, might have missed some events */
+      g->AltKey    = getbutton(LEFTALTKEY) || getbutton(RIGHTALTKEY);
+      g->ShiftKey  = getbutton(LEFTSHIFTKEY) || getbutton(RIGHTSHIFTKEY);
+      g->LeftMouse = getbutton(LEFTMOUSE);
+      /* fprintf(stderr, "AltKey = %d, ShiftKey = %d\n", g->AltKey, g->ShiftKey); */
+    }
     goto show;
   case MOUSEX:
     mx = val;
@@ -2066,10 +2155,33 @@ void ProcessQueue(NumParams *p, GraphParams *g) {
       winset(g->MainW);
       gl2ppm("| ppmtogif > fsscale.gif");
       break;
-    case 'Q': ReadVars(p); todo = ReCa; break;
-    case 'W': WriteVars(p);             break;
+    case 'Q': 
+      ReadParams(p, g);
+      if (p->Command[0] != '\0') ReadData(p);
+      todo = ReCa;
+      break;
+    case 'W':
+      WriteParams(p, g);
+      break;
     case 'p': g->RemoveFiles = 1; rewrite = write_all(1, rewrite); break;
     case 'P': g->RemoveFiles = 0; rewrite = write_all(1, rewrite); break;
+    case '=':
+      p->L0_only_in_log ^= 1;
+      switch (p->L0_only_in_log) {
+      case 0:
+	p->Xf   *= Pow(p->L0, p->X);
+	p->Lxsf /= Pow(p->L0, p->X);
+	p->Yf   *= Pow(p->L0, p->Y);
+	p->Lysf /= Pow(p->L0, p->Y);
+	break;
+      case 1:
+	p->Xf   /= Pow(p->L0, p->X);
+	p->Lxsf *= Pow(p->L0, p->X);
+	p->Yf   /= Pow(p->L0, p->Y);
+	p->Lysf *= Pow(p->L0, p->Y);
+	break;
+      }
+      todo = ReCa; break;
     case 'q':
     case '\033':
 #ifdef OLD_DATFILES
@@ -2125,7 +2237,7 @@ void ProcessQueue(NumParams *p, GraphParams *g) {
 }
 
 int write_all(int flag, int rewrite) {
-  static plotting = 0;
+  static int plotting = 0;
   
   if (!(flag || plotting)) return rewrite; /* flag == 1 when 'p' was pressed
 					      plotting == 1 when we are in
@@ -2440,7 +2552,7 @@ int main(int argc, char *argv[]) {
   NumParams P;
   
   GraphParams G = {
-    {WHITE, GREEN, YELLOW, CYAN, MAGENTA, RED, GRAY},
+    {GRAY, GREEN, YELLOW, CYAN, MAGENTA, RED, WHITE},
     WHITE,
     BLACK,
     180,
@@ -2450,7 +2562,7 @@ int main(int argc, char *argv[]) {
     1,
     400, 400,
     "FSScale",
-    "-*-Times-Medium-R-Normal--*-120-*-*-*-*-*-*",
+    "-*-Times-Medium-R-Normal--16-*-*-*-*-*-*-*",
     {"L", "T", "M", "D"},
     {0.02, 0.01},
     0, 0, 0,
@@ -2478,9 +2590,7 @@ int main(int argc, char *argv[]) {
   P.FullFit = 1;
   P.VarFactor = 1.0;
   P.VarsFile = NULL;
-  
-  if (isatty(fileno(stdin)))
-    fprintf(stderr, "%s: reading input from terminal.\n", P.Progname);
+  P.L0_only_in_log = 0;
   
   GetArgs(&P, &G, argc, argv);
   
