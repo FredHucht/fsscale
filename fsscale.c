@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995, 1996
  *
- * $Id: fsscale.c,v 2.20 1997/03/12 15:34:47 michael Exp michael $
+ * $Id: fsscale.c,v 2.21 1997-03-12 16:54:16+01 michael Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.21  1997-03-12 16:54:16+01  michael
+ * kleinen bug beim dateinamen erzeugen gefixt
+ *
  * Revision 2.20  1997/03/12 15:34:47  michael
  * namen für gnuplot outputfiles überarbeitet.
  *
@@ -123,7 +126,7 @@ double  Mean[ASZ], Var[ASZ][2];
 double LMean[ASZ], LVar[ASZ][2];
 #endif
 
-int Colors[] = {WHITE, GREEN, YELLOW, CYAN, MAGENTA, RED, GRAY};
+int  Colors[] = {WHITE, GREEN, YELLOW, CYAN, MAGENTA, RED, GRAY};
 Int32 FgColor = WHITE;
 Int32 BgColor = BLACK;
 int   GrayVal = 180;
@@ -171,19 +174,21 @@ int    NumRows = 3;
 char   *Names[] = {"L", "T", "M", "C4"};
 char   Xlab[256], Ylab[256];
 int    AutoScale = 1;
-int    replot = 1;
+int    Replot = 1;
 #ifdef BEWERT
 int    ShowVar = 0;
 #endif
-int removedatafile = 1;
+int    RemoveFiles = 1;
 double Delta = 0.1;
-time_t starttime;
+/*time_t starttime;*/
 Int32  MainW, PlotW;
 int    Swh, FontH, FontD;
 char   *Title = "FSScale";
 char   *Progname;
 char   *Font  = "-*-Times-Medium-R-Normal--*-120-*-*-*-*-*-*";
-char   *RCSId = "$Id: fsscale.c,v 2.20 1997/03/12 15:34:47 michael Exp michael $";
+char   *RCSId = "$Id: fsscale.c,v 2.21 1997-03-12 16:54:16+01 michael Exp fred $";
+char   GPName[256]   = "";
+char   XmgrName[256] = "";
 
 #define NUMACTIVE (sizeof(Variables)/sizeof(Variables[0]))
 double dummy = 0.0, *Variables[] = {
@@ -205,14 +210,20 @@ int Actives[NUMACTIVE] = {
 };
 int Active = AOff, Activei = 0, NumActive = NUMACTIVE - 2;
 
-void gnuplot(int);    
+void write_both(int);
+void write_gnuplot(void);
+void write_xmgr(void);
 void byebye(int sig);
 
 void byebye(int sig) {
   int i;
-  if (removedatafile) for(i = 0; i < S; i++) {
-    Set_t *s  = &Set[i];
-    if(s->datfilename[0] != 0) remove(s->datfilename);
+  if (RemoveFiles) {
+    for(i = 0; i < S; i++) {
+      Set_t *s  = &Set[i];
+      if(s->datfilename[0] != 0) remove(s->datfilename);
+    }
+    if(  GPName[0] != 0) remove(  GPName);
+    if(XmgrName[0] != 0) remove(XmgrName);
   }
   exit(sig);
 }
@@ -234,7 +245,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.20 $ (C) Fred Hucht 1995, 1996\n"
+	    "$Revision: 2.21 $ (C) Fred Hucht 1995, 1996\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
@@ -1238,7 +1249,7 @@ void ProcessQueue(void) {
   
   switch(dev) {
   case INPUTCHANGE:
-    if (val == 0) gnuplot(0);
+    if (val == 0) write_both(0);
     showpos = val == PlotW;
     goto show;
   case MOUSEX:
@@ -1255,14 +1266,14 @@ void ProcessQueue(void) {
       winset(PlotW);
       if(Selector(&OXmin, &OXmax, &OYmin, &OYmax)) {
 	AutoScale = 0;
-	replot = rd = 1;
+	Replot = rd = 1;
       }
     }
     break;
   case MIDDLEMOUSE:
     if(val == 1) {
       AutoScale = 1;
-      replot = rd = 1;
+      Replot = rd = 1;
     }
     break;
   case RIGHTMOUSE:
@@ -1278,7 +1289,7 @@ void ProcessQueue(void) {
       OXmax = xc + ZOOMOUT * xd;
       OYmin = yc - ZOOMOUT * yd;
       OYmax = yc + ZOOMOUT * yd;
-      replot = rd = 1;
+      Replot = rd = 1;
     }
     break;
   case REDRAW:
@@ -1338,7 +1349,7 @@ void ProcessQueue(void) {
 	rc = 1;
       }
     } else switch(val) {
-    case 'a': AutoScale = 1;      replot = rd = 1; break;
+    case 'a': AutoScale = 1;      Replot = rd = 1; break;
     case 'A': AutoScale = 0;                       break;
     case 'r':
       ExpX = ExpX_o;
@@ -1381,16 +1392,16 @@ void ProcessQueue(void) {
     case 'D': ExpBx -= Delta; INTCHECK(ExpBx); rc = 1; break;
     case 'b': ExpBy += Delta; INTCHECK(ExpBy); rc = 1; break;
     case 'B': ExpBy -= Delta; INTCHECK(ExpBy); rc = 1; break;
-    case 'l': Lines = (Lines + 1) % 3; replot = rd = 1; break;
-    case 'g': Grid    ^= 1; replot = rd = 1; break;
+    case 'l': Lines = (Lines + 1) % 3; Replot = rd = 1; break;
+    case 'g': Grid    ^= 1; Replot = rd = 1; break;
     case 'v': ShowVar ^= 1; rc = 1; break;
     case '<': Delta *= 0.1; rd = 1; break;
     case '>': Delta *= 10.; rd = 1; break;
-    case 'x': AutoScale = 1; LogX ^= 1; replot = rd = 1; break;
-    case 'y': AutoScale = 1; LogY ^= 1; replot = rd = 1; break;
+    case 'x': AutoScale = 1; LogX ^= 1; Replot = rd = 1; break;
+    case 'y': AutoScale = 1; LogY ^= 1; Replot = rd = 1; break;
     case 's': gl2ppm("| ppmtogif > fsscale.gif"); break;
-    case 'p': removedatafile = 1; gnuplot(1); break;
-    case 'P': removedatafile = 0; gnuplot(1); break;
+    case 'p': RemoveFiles = 1; write_both(1); break;
+    case 'P': RemoveFiles = 0; write_both(1); break;
     case 'q':
     case '\033':
       byebye(0);
@@ -1413,7 +1424,7 @@ void ProcessQueue(void) {
   
   if(rc) {
     Calculate();
-    replot = rd = 1;
+    Replot = rd = 1;
   }
   
   if(rd) {
@@ -1422,42 +1433,164 @@ void ProcessQueue(void) {
   }
 }
 
-void gnuplot(int flag) {
-  FILE *gpfile;
-  int i, j, first;
+void write_both(int flag) {
   static plotting = 0;
-  static char gpfname[256] = "";
-  char *styles[] = { "points", "lines", "linespoints" };
-
+  
   if (!(flag || plotting)) return; /* flag == 1 when 'p' was pressed
 				      plotting == 1 when we are in
 				      "plotting-mode", i. e. 'p' has been
 				      pressed at least once */
-  if (!replot && !flag) return;    /* replot == 1 when plot has changed
-				      and needs to be replotted.
-				      flag forces a replot (see above) */
+  if (!Replot && !flag) return;    /* Replot == 1 when plot has changed
+				      and needs to be Replotted.
+				      flag forces a Replot (see above) */
   color(FgColor); rectfi(0,0,2,2); sleep(0);
   plotting = 1;
-  replot = 0;
-  if (gpfname[0] == 0) {
-    sprintf(gpfname, "%s.%d.X", GNUPLOTFILE, (int)(starttime - 851472000));
-    mkstemp(gpfname);
+  Replot = 0;
+  write_gnuplot();
+  write_xmgr();
+  color(BgColor); rectfi(0,0,2,2); sleep(0);
+}
+
+void xmgr_lab(char *to, const char *from) {
+  const char *i;
+  int j;
+  for(i = from, j = 0; *i != '\0'; i++) {
+    switch(*i) {
+    case '{':
+    case '$': /* Ignore */
+      break;
+    case '#':
+      i++;
+      break;
+    case '\\':
+      i++;
+      if(*i == 'c' && *(i+1) == 'd' && *(i+2) == 'o' && *(i+3) == 't') {
+	i += 4;
+	to[j++] = 'x'; to[j++] = ' ';
+      }
+      break;
+    case '}':
+      to[j++] = '\\'; to[j++] = 'N';      
+      break;
+    case '^':
+      to[j++] = '\\'; to[j++] = 'S';
+      break;
+    case '_':
+      to[j++] = '\\'; to[j++] = 's';
+      break;
+    default:
+      to[j++] = *i;
+      break;
+    }
   }
-  if ((gpfile = fopen(gpfname, "w")) == NULL) {
-    perror(gpfname);
+  to[j] = '\0';
+}
+
+void write_xmgr(void) {
+  FILE *xmgrfile;
+  int i, j, first;
+  char *logtype[2][2] = {{"xy", "logy"}, {"logx", "logxy"}};
+  char xlab[128], ylab[128];
+  
+  if (XmgrName[0] == 0) {
+    /*sprintf(GPName, "%s.%d.X", GNUPLOTFILE, (int)(starttime - 851472000));
+      mkstemp(GPName);
+      */
+    sprintf(XmgrName, "fsscale-%d-%s,%s.xmgr", 
+	    getpid(), Names[1], Names[2]);
+  }
+  if ((xmgrfile = fopen(XmgrName, "w")) == NULL) {
+    perror(XmgrName);
+    return;
+  }
+  
+  xmgr_lab(xlab, Xlab);
+  xmgr_lab(ylab, Ylab);
+  
+  fprintf(xmgrfile,
+	  "# ACE/gr parameter file Hehe\n"
+	  "@default linestyle 1\n"
+	  "@default linewidth 1\n"
+	  "@default char size 1.0\n"
+	  "@default font 4\n"
+	  "@default font source 0\n"
+	  "@default symbol size 1.0\n"
+	  "@with g0\n"
+	  "@g0 on\n"
+	  "@g0 label off\n"
+	  "@g0 type %s\n"
+	  "@g0 autoscale type AUTO\n"
+	  /* "@ world xmin %g\n" "@ world xmax %g\n"
+	     "@ world ymin %g\n" "@ world ymax %g\n" */
+	  "@ view xmin 0.15\n" "@ view xmax 0.75\n"
+	  "@ view ymin 0.15\n" "@ view ymax 0.85\n"
+	  "@ title \"%s\"\n"
+	  "@ title size 1.5\n"
+	  "@ title color 1\n"
+	  "@ xaxis label \"%s\"\n"
+	  "@ yaxis label \"%s\"\n"
+	  "@ legend on\n",
+	  logtype[LogX][LogY],
+	  /*LogX ? exp10(OXmin) : OXmin,
+	    LogX ? exp10(OXmax) : OXmax,
+	    LogY ? exp10(OYmin) : OYmin,
+	    LogY ? exp10(OYmax) : OYmax,*/
+	  Title, xlab, ylab);
+  for(i = 0; i < S; i++) if(Set[i].active) {
+    Set_t *s  = &Set[i];
+    
+    fprintf(xmgrfile, "@ s%d linewidth %d\n",		i, Lines);
+    fprintf(xmgrfile, "@ s%d color %d\n",		i, i + 1);
+    fprintf(xmgrfile, "@ s%d symbol %d\n",		i, i + 2);
+    fprintf(xmgrfile, "@ s%d symbol color %d\n",	i, i + 1);
+    fprintf(xmgrfile, "@ s%d symbol size 0.5\n",	i);
+    fprintf(xmgrfile, "@ s%d type xy\n",		i);
+    fprintf(xmgrfile, "@ s%d comment \" Bla \"\n",	i);
+    fprintf(xmgrfile, "@ legend string %d \"%s = %g\"\n",
+	    i, Names[0], s->L);
+    for(j = 0; j < s->N; j++) {
+      Data_t *d = &s->Data[j];
+      fprintf(xmgrfile, "%g %g\n", d->x[0], d->x[1]);
+    }
+    fprintf(xmgrfile, "&\n");
+  }
+  fprintf(xmgrfile, "@autoscale\n");
+  fclose(xmgrfile);
+}
+
+void write_gnuplot(void) {
+  FILE *gpfile;
+  int i, j, first;
+  char *styles[] = { "points", "lines", "linespoints" };
+  
+  if (GPName[0] == 0) {
+    /*sprintf(GPName, "%s.%d.X", GNUPLOTFILE, (int)(starttime - 851472000));
+      mkstemp(GPName);
+      */
+    sprintf(GPName, "fsscale-%d-%s,%s.gp", 
+	    getpid(), Names[1], Names[2]);
+  }
+  if ((gpfile = fopen(GPName, "w")) == NULL) {
+    perror(GPName);
     return;
   }
   for(i = 0; i < S; i++) if(Set[i].active) {
     Set_t *s  = &Set[i];
     if(s->datfilename[0] == 0) {
-      sprintf(s->datfilename, "%s.dat.XXX", gpfname);
-      mkstemp(s->datfilename);
+      /*sprintf(s->datfilename, "%s.dat.XXX", GPName);
+	mkstemp(s->datfilename);*/
+      sprintf(s->datfilename, "fsscale-%d-%s,%s,%s=%g.dat",
+	      getpid(), Names[1], Names[2], Names[0], s->L);
     }
     if((s->datfile = fopen(s->datfilename, "w")) == NULL) {
       perror(s->datfilename);
-    } else for(j = 0; j < s->N; j++) {
-      Data_t *d = &s->Data[j];
-      fprintf(s->datfile, "%g %g\n", d->x[0], d->x[1]);
+    } else {
+      fprintf(s->datfile, "##Params: %s=%g\n##Names: %s %s\n",
+	      Names[0], s->L, Names[1], Names[2]);
+      for(j = 0; j < s->N; j++) {
+	Data_t *d = &s->Data[j];
+	fprintf(s->datfile, "%g %g\n", d->x[0], d->x[1]);
+      }
     }
     fclose(s->datfile);
   }
@@ -1486,8 +1619,6 @@ void gnuplot(int flag) {
   }
   fprintf(gpfile, "\n");
   fclose(gpfile);
-  color(BgColor); rectfi(0,0,2,2); sleep(0);
-  return;
 }
   
 int main(int argc, char *argv[]) {
@@ -1495,7 +1626,7 @@ int main(int argc, char *argv[]) {
   signal(SIGHUP,  byebye);
   signal(SIGTERM, byebye);
   signal(SIGINT,  byebye);
-  starttime = time(NULL);
+  /*starttime = time(NULL);*/
   Progname = argv[0];
   if(isatty(fileno(stdin)))
    fprintf(stderr, "%s: reading input from terminal.\n", Progname);
@@ -1506,4 +1637,3 @@ int main(int argc, char *argv[]) {
   Calculate();
   while(1) ProcessQueue();
 }
-
