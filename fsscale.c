@@ -90,6 +90,7 @@
 #include <stdlib.h>
 #include <malloc.h>
 #include <math.h>
+#include <float.h>
 #include <string.h>
 #include <signal.h>
 #include <unistd.h>
@@ -122,7 +123,7 @@ typedef struct Data_t_ {
 
 typedef struct Set_t_ {
   double L;		/* Scaling parameter, normally linear system size */
-  double B;		/* Additional scaling parameter column 4 */
+  double D;		/* Additional scaling parameter column 4 */
   int    color;		/**/
   int    active;
   int	 N;		/* Number of data points */
@@ -177,9 +178,9 @@ double ExpZ   = 1.0;
 double ExpU   = 1.0;
 double ExpLx  = 0.0;
 double ExpLy  = 0.0;
-double ExpBx  = 0.0;
-double ExpBy  = 0.0;
-double ExpBu  = 0.0;
+double ExpDx  = 0.0;
+double ExpDy  = 0.0;
+double ExpDu  = 0.0;
 double XFak   = 1.0;
 double YFak   = 1.0;
 int    Lines  = 1;
@@ -222,17 +223,17 @@ double dummy = 0.0, *Variables[] = {
   &XFak,
   &Tc, &ExpZ,
   &Lc,
-  &ExpX, &ExpBx, &ExpLx,
+  &ExpX, &ExpDx, &ExpLx,
   &YFak,
-  &Mc, &ExpU, &ExpBu,
-  &ExpY, &ExpBy, &ExpLy,
+  &Mc, &ExpU, &ExpDu,
+  &ExpY, &ExpDy, &ExpLy,
   /*Tc*/ &ExpM
 };
 enum   ActiveNames {
-  AOff, AXF, ATc, AZ, ALc, AX, ABx, ALx, AYF, AMc, AU, ABu, AY, ABy, ALy, AM
+  AOff, AXF, ATc, AZ, ALc, AX, ADx, ALx, AYF, AMc, AU, ADu, AY, ADy, ALy, AM
 };
 int Actives[NUMACTIVE] = {
-  0,    1,   2,   3,  4,   5,       7,   8,   9,   10,      12,      14,  15
+  0,    1,   2,   3,  4,   5,/*6*/  7,   8,   9,   10,/*11*/12,/*13*/14,  15
 };
 int Active = AOff, Activei = 0, NumActive = NUMACTIVE - 3;
 
@@ -347,7 +348,7 @@ void Usage(int verbose) {
 #ifdef BEWERT
 	    "  Key 'v':            Toggle drawing of variance function\n"
 	    "                      red curve: variance of datasets\n"
-	    "                      blue curve: previous variance\n"
+	    "                      gray curve: previous variance\n"
 #endif
 	    "  Key 'x':            Toggle X-axis linear/log scale\n"
 	    "  Key 'y':            Toggle Y-axis linear/log scale\n"
@@ -365,12 +366,8 @@ void GetArgs(int argc, char *argv[]) {
   
   while ((ch = getopt(argc, argv, "ht:x:y:m:l:vN:T:f:rA:4?")) != EOF)
     switch(ch) {
-      /*
-	case 'g':
-	BetaName = "Gamma";
-	BetaFak  = -1.0;
-	break;
-	*/
+      char *p;
+      /* case 'g':BetaName = "Gamma";BetaFak  = -1.0;break; */
     case 'h':
       Usage(1);
       break;
@@ -429,17 +426,12 @@ void GetArgs(int argc, char *argv[]) {
       Colors[2] = BLUE;
       break;      
     case 'l':
-      if (strcmp(optarg, "x") == 0) {
-	LogX = 1; break;
+      for (p = optarg; *p != '\0'; p++) switch(*p) {
+      case 'x': LogX = 1; break;
+      case 'y': LogY = 1; break;
+      default:  Usage(0); break;
       }
-      if (strcmp(optarg, "y") == 0) {
-	LogY = 1; break;
-      }
-      if ((  strcmp(optarg, "xy") == 0)
-	 ||(strcmp(optarg, "yx") == 0)) {
-	LogX = LogY = 1; break;
-      }
-      /* Nobreak */
+      break;
     default:
       Usage(0);
       break;
@@ -509,11 +501,11 @@ void ReadData(void) {
     fgets(buf, sizeof(buf), stdin);
     lineno++;
     if (buf[0] != '#') {
-      double L, T, M, B = 0.0;
-      int n = sscanf(buf, "%lf %lf %lf %lf", &L, &T, &M, &B);
+      double L, T, M, D = 0.0;
+      int n = sscanf(buf, "%lf %lf %lf %lf", &L, &T, &M, &D);
       if (n >= NumRows) { /* Valid */
 #if 0
-	fprintf(stdout, "%lf %lf %lf %lf\n", L, T, M ,B);
+	fprintf(stdout, "%lf %lf %lf %lf\n", L, T, M ,D);
 #endif
 	if (L != oldL) { /* New set */
 	  oldL      = L;
@@ -521,7 +513,7 @@ void ReadData(void) {
 	  Set       = (Set_t*) realloc(Set, (S+1) * sizeof(Set_t));
 	  s         = &Set[S];
 	  s->L      = L;
-	  if (NumRows == 4) s->B = B;
+	  if (NumRows == 4) s->D = D;
 	  s->color  = Colors[S % (sizeof(Colors)/sizeof(Colors[0]))];
 	  s->active = 1;
 	  s->N      = 0;
@@ -554,20 +546,20 @@ void ReadData(void) {
 void Calculate(void) {
   int i, j;
   
-  Xmin = XminXp = XminYp = 1e100;
-  Ymin = YminXp = YminYp = 1e100;
-  Xmax = XmaxYp = -1e100;
-  Ymax = YmaxXp = -1e100;
+  Xmin = XminXp = XminYp = DBL_MAX;
+  Ymin = YminXp = YminYp = DBL_MAX;
+  Xmax = XmaxYp = -DBL_MAX;
+  Ymax = YmaxXp = -DBL_MAX;
   
   for (i = 0; i < S; i++) if (Set[i].active) {
     Set_t *s   = &Set[i];
-    double Lx  = XFak * pow(s->L - Lc, ExpX + ExpBx * s->B) * pow(log(s->L), ExpLx);
-    double Ly  = YFak * pow(s->L,      ExpY + ExpBy * s->B) * pow(log(s->L), ExpLy);
+    double Lx  = XFak * pow(s->L - Lc, ExpX + ExpDx * s->D) * pow(log(s->L), ExpLx);
+    double Ly  = YFak * pow(s->L,      ExpY + ExpDy * s->D) * pow(log(s->L), ExpLy);
     
     for (j = 0; j < s->N; j++) {
       Data_t *d = &s->Data[j];
       double x  = d->x[0] = pow(d->T - Tc, ExpZ) * Lx;
-      double y  = d->x[1] = pow(d->M - Mc, ExpU + ExpBu * s->B) * Ly * pow(d->T - Tc, ExpM);
+      double y  = d->x[1] = pow(d->M - Mc, ExpU + ExpDu * s->D) * Ly * pow(d->T - Tc, ExpM);
       
       d->lx[0] = (x > 0.0) ? log10(x) : 0.0;
       d->lx[1] = (y > 0.0) ? log10(y) : 0.0;
@@ -691,7 +683,7 @@ void Calculate(void) {
       } else {
 	Var[AV][k][1] /= m;
 	Var[AV][k][1] = Var[AV][k][1] - Mean[k] * Mean[k];
-	/*Var[AV][k] /= Mean[k]; Relative variance */
+	Var[AV][k][1] /= Mean[k]; /* Relative variance */
       }
       var += Var[AV][k][1];
       
@@ -703,6 +695,7 @@ void Calculate(void) {
       } else {
 	LVar[AV][k][1] /= lm;
 	LVar[AV][k][1]  = LVar[AV][k][1] - LMean[k] * LMean[k];
+	LVar[AV][k][1] /= LMean[k]; /* Relative variance */
       }
       lvar += LVar[AV][k][1];
 #ifdef DEBUG
@@ -877,20 +870,20 @@ void Draw(void) {
   }
   
   /* * (L - Lc) */
-  if (ExpBx || ExpX || Lc || Active == ALc || Active == AX || Active == ABx) {
+  if (ExpDx || ExpX || Lc || Active == ALc || Active == AX || Active == ADx) {
     charstrC(" * ");
     charstrC(lmlc);
     ncx += sprintf(Xlab + ncx, " * %s", lmlc);
     
-    /* ^(x + By B) */
-    switch(2 * (ExpX || Active == AX) + (ExpBx || Active == ABx)) {
+    /* ^(x + Dy D) */
+    switch(2 * (ExpX || Active == AX) + (ExpDx || Active == ADx)) {
     case 3: /* Both */
       sprintf(text, "(#%c%g#%c%+g#0*%s)",
 	      (Active == AX ) + '0', ExpX,
-	      (Active == ABx) + '0', ExpBx,
+	      (Active == ADx) + '0', ExpDx,
 	      Names[3]);
       charstrH(text, FontH/2);
-      ncx += sprintf(Xlab + ncx, "\\S%g%+g %s\\N", ExpX, ExpBx, Names[3]);
+      ncx += sprintf(Xlab + ncx, "\\S%g%+g %s\\N", ExpX, ExpDx, Names[3]);
       break;
     case 2: /* X */
       if (ExpX != 1.0 || Active == AX) {
@@ -899,10 +892,10 @@ void Draw(void) {
 	ncx += sprintf(Xlab + ncx, "\\S%g\\N", ExpX);
       }
       break;
-    case 1: /* Bx */
-      sprintf(text, "#%c%g#0*%s", (Active == ABx) + '0', ExpBx, Names[3]);
+    case 1: /* Dx */
+      sprintf(text, "#%c%g#0*%s", (Active == ADx) + '0', ExpDx, Names[3]);
       charstrH(text, FontH/2);
-      ncx += sprintf(Xlab + ncx, "\\S%g %s\\N", ExpBx, Names[3]);
+      ncx += sprintf(Xlab + ncx, "\\S%g %s\\N", ExpDx, Names[3]);
       break;
     }
   }
@@ -926,15 +919,15 @@ void Draw(void) {
   
   ncy += sprintf(Ylab + ncy, "%s%s", YFak == 1.0 ? "" : "-", mmmc);
   
-  /* ^(u + Bu B) */
-  switch(2 * (ExpU || Active == AU) + (ExpBu || Active == ABu)) {
+  /* ^(u + Du D) */
+  switch(2 * (ExpU || Active == AU) + (ExpDu || Active == ADu)) {
   case 3: /* Both */
     sprintf(text, "(#%c%g#%c%+g#0*%s)",
 	    (Active == AU ) + '0', ExpU,
-	    (Active == ABu) + '0', ExpBu,
+	    (Active == ADu) + '0', ExpDu,
 	    Names[3]);
     charstrH(text, FontH/2);
-    ncy += sprintf(Ylab + ncy, "\\S%g%+g %s\\N", ExpU, ExpBu, Names[3]);
+    ncy += sprintf(Ylab + ncy, "\\S%g%+g %s\\N", ExpU, ExpDu, Names[3]);
     break;
   case 2: /* U */
     if (ExpU != 1.0 || Active == AU) {
@@ -943,10 +936,10 @@ void Draw(void) {
       ncy += sprintf(Ylab + ncy, "\\S%g\\N", ExpU);
     }
     break;
-  case 1: /* Bu */
-    sprintf(text, "#%c%g#0*%s", (Active == ABu) + '0', ExpBu, Names[3]);
+  case 1: /* Du */
+    sprintf(text, "#%c%g#0*%s", (Active == ADu) + '0', ExpDu, Names[3]);
     charstrH(text, FontH/2);
-    ncy += sprintf(Ylab + ncy, "\\S%g %s\\N", ExpBu, Names[3]);
+    ncy += sprintf(Ylab + ncy, "\\S%g %s\\N", ExpDu, Names[3]);
     break;
   }
 #if 0
@@ -957,20 +950,20 @@ void Draw(void) {
   }
 #endif
   /* * L */
-  if (ExpBy || ExpY || Active == AY || Active == ABy) {
+  if (ExpDy || ExpY || Active == AY || Active == ADy) {
     charstrC(" * ");
     charstrC(Names[0]);
     ncy += sprintf(Ylab + ncy, " * %s", Names[0]);
     
-    /* ^(y + By B) */
-    switch(2 * (ExpY || Active == AY) + (ExpBy || Active == ABy)) {
+    /* ^(y + Dy D) */
+    switch(2 * (ExpY || Active == AY) + (ExpDy || Active == ADy)) {
     case 3: /* Both */
       sprintf(text, "(#%c%g#%c%+g#0*%s)",
 	      (Active == AY ) + '0', ExpY,
-	      (Active == ABy) + '0', ExpBy,
+	      (Active == ADy) + '0', ExpDy,
 	      Names[3]);
       charstrH(text, FontH/2);
-      ncy += sprintf(Ylab + ncy, "\\S%g%+g %s\\N", ExpY, ExpBy, Names[3]);
+      ncy += sprintf(Ylab + ncy, "\\S%g%+g %s\\N", ExpY, ExpDy, Names[3]);
       break;
     case 2: /* Y */
       if (ExpY != 1.0 || Active == AY) {
@@ -979,10 +972,10 @@ void Draw(void) {
 	ncy += sprintf(Ylab + ncy, "\\S%g\\N", ExpY);
       }
       break;
-    case 1: /* By */
-      sprintf(text, "#%c%g#0*%s", (Active == ABy) + '0', ExpBy, Names[3]);
+    case 1: /* Dy */
+      sprintf(text, "#%c%g#0*%s", (Active == ADy) + '0', ExpDy, Names[3]);
       charstrH(text, FontH/2);
-      ncy += sprintf(Ylab + ncy, "\\S%g %s\\N", ExpBy, Names[3]);
+      ncy += sprintf(Ylab + ncy, "\\S%g %s\\N", ExpDy, Names[3]);
       break;
     }
   }
@@ -1157,7 +1150,7 @@ void Draw(void) {
   if (ShowVar) {
     int i, k, l, av;
     for (i = 0, av = 1 - AV; i < 2; i++) {
-      color(i == 0 ? BLUE : RED);
+      color(i == 0 ? GRAY : RED);
       for (k = l = 0; k < ASZ || l < ASZ;) {
 	double x[2];
 	if (((Var[av][k][0] < LVar[av][l][0]) && k < ASZ) || l >= ASZ) {
@@ -1444,7 +1437,7 @@ void ProcessQueue(void) {
       Lc = Mc = 0;
       ExpZ = ExpU = XY = 1;
       ExpLx = ExpLy = 0;
-      ExpBx = ExpBy = ExpBu = 0;
+      ExpDx = ExpDy = ExpDu = 0;
       XFak = YFak = 1.0;
       break;
     case 'c': Lc   += Delta; INTCHECK(Lc  ); rc = 1; break;
@@ -1469,14 +1462,14 @@ void ProcessQueue(void) {
 #endif
     case 'n': Ny   += Delta; INTCHECK(Ny  ); XY = 2; break;
     case 'N': Ny   -= Delta; INTCHECK(Ny  ); XY = 2; break;
-#if 0
     case 'b': Beta += Delta; INTCHECK(Beta); XY = 2; break;
     case 'B': Beta -= Delta; INTCHECK(Beta); XY = 2; break;
+#if 0
+    case 'd': ExpDx+= Delta; INTCHECK(ExpDx);rc = 1; break;
+    case 'D': ExpDx-= Delta; INTCHECK(ExpDx);rc = 1; break;
+    case 'b': ExpDy+= Delta; INTCHECK(ExpDy);rc = 1; break;
+    case 'B': ExpDy-= Delta; INTCHECK(ExpDy);rc = 1; break;
 #endif
-    case 'd': ExpBx+= Delta; INTCHECK(ExpBx);rc = 1; break;
-    case 'D': ExpBx-= Delta; INTCHECK(ExpBx);rc = 1; break;
-    case 'b': ExpBy+= Delta; INTCHECK(ExpBy);rc = 1; break;
-    case 'B': ExpBy-= Delta; INTCHECK(ExpBy);rc = 1; break;
       
     case 'l': Lines = (Lines + 1) % 3; Rewrite = rd = 1; break;
     case 'g': Grid    ^= 1; Rewrite = rd = 1; break;
