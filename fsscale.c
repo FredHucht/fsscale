@@ -1,9 +1,12 @@
 /*
  * Finite Size scaling (C) Fred Hucht 1995, 1996
  *
- * $Id: fsscale.c,v 2.3 1996/07/31 18:29:35 fred Exp fred $
+ * $Id: fsscale.c,v 2.4 1996/09/11 20:40:18 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.4  1996/09/11 20:40:18  fred
+ * Added ExpU
+ *
  * Revision 2.3  1996/07/31 18:29:35  fred
  * Added ExpZ, Lc
  *
@@ -30,7 +33,8 @@
 # define MIN(a, b) ((a) < (b) ? (a) : (b))
 #endif
 
-#define ZCHECK(var) if(fabs(var) < 1e-10) var = 0.0
+/* #define INTCHECK(var) if(fabs(var) < 1e-10) var = 0.0 */
+#define INTCHECK(var) do { double ivar = floor(var + 0.5); if(fabs(var - ivar) < 1e-10) var = ivar; } while(0)
 
 #define GRAY 8
 #define FRAME 	10
@@ -111,7 +115,7 @@ int    Swh, FontH, FontD;
 char   *Title = "FSScale";
 char   *Progname;
 char   *Font  = "-*-Times-Medium-R-Normal--*-120-*-*-*-*-*-*";
-char   *RCSId = "$Id: fsscale.c,v 2.3 1996/07/31 18:29:35 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.4 1996/09/11 20:40:18 fred Exp fred $";
 
 double exp10(double x) {
   return pow(10.0, x);
@@ -129,7 +133,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.3 $ (C) Fred Hucht 1995, 1996\n"
+	    "$Revision: 2.4 $ (C) Fred Hucht 1995, 1996\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
@@ -351,9 +355,9 @@ void Calculate(void) {
   
   Xmin = XminXp = XminYp = 1e100;
   Ymin = YminXp = YminYp = 1e100;
-  Xmax = XmaxYp = 1e-100;
-  Ymax = YmaxXp = 1e-100;
-
+  Xmax = XmaxYp = -1e100;
+  Ymax = YmaxXp = -1e100;
+  
   for(i = 0; i < S; i++) if(Set[i].active) {
     Set_t *s  = &Set[i];
     double Lx = pow(s->L - Lc, ExpX);
@@ -627,7 +631,7 @@ void Draw(void) {
   }
   if(ExpX || Lc) {
     sprintf(text, " * %s", lmlc);     charstr (text);
-    if(fabs(ExpX - 1.0) > 1e-8) {
+    if(ExpX != 1.0) {
       sprintf(text, "%g",  ExpX);     charstrH(text, FontH/2);
     }
   }
@@ -637,13 +641,13 @@ void Draw(void) {
   }
   if(ExpM) {
     sprintf(text, " * %s", tmtc);     charstr(text);
-    if(fabs(ExpM - 1.0) > 1e-8) {
+    if(ExpM != 1.0) {
       sprintf(text, "%g",  ExpM);     charstrH(text, FontH/2);
     }
   }
   if(ExpY) {
     sprintf(text, " * %s", Names[0]); charstr (text);
-    if(fabs(ExpY - 1.0) > 1e-8) {
+    if(ExpY != 1.0) {
       sprintf(text, "%g",  ExpY);     charstrH(text, FontH/2);
     }
   }
@@ -1005,12 +1009,12 @@ void ProcessQueue(void) {
 #endif
     rd = 1;
     break;
-  case  DOWNARROWKEY: if(val) {ExpY -= Delta; ZCHECK(ExpY); XY = 1;} break;
-  case    UPARROWKEY: if(val) {ExpY += Delta; ZCHECK(ExpY); XY = 1;} break;
-  case  LEFTARROWKEY: if(val) {ExpX -= Delta; ZCHECK(ExpX); XY = 1;} break;
-  case RIGHTARROWKEY: if(val) {ExpX += Delta; ZCHECK(ExpX); XY = 1;} break;
-  case     PAGEUPKEY: if(val) {ExpM += Delta; ZCHECK(ExpM); XY = 1;} break;
-  case   PAGEDOWNKEY: if(val) {ExpM -= Delta; ZCHECK(ExpM); XY = 1;} break;
+  case  DOWNARROWKEY: if(val) {ExpY -= Delta; INTCHECK(ExpY); XY = 1;} break;
+  case    UPARROWKEY: if(val) {ExpY += Delta; INTCHECK(ExpY); XY = 1;} break;
+  case  LEFTARROWKEY: if(val) {ExpX -= Delta; INTCHECK(ExpX); XY = 1;} break;
+  case RIGHTARROWKEY: if(val) {ExpX += Delta; INTCHECK(ExpX); XY = 1;} break;
+  case     PAGEUPKEY: if(val) {ExpM += Delta; INTCHECK(ExpM); XY = 1;} break;
+  case   PAGEDOWNKEY: if(val) {ExpM -= Delta; INTCHECK(ExpM); XY = 1;} break;
     
   case KEYBD:
     if(val >= '0' && val <= '9') {
@@ -1027,26 +1031,26 @@ void ProcessQueue(void) {
       ExpX = ExpY = ExpM = Lc = Tc = Mc = 0;
       ExpZ = ExpU = XY = 1;
       break;
-    case 'c': Lc   += Delta; ZCHECK(Lc  ); rc = 1; break;
-    case 'C': Lc   -= Delta; ZCHECK(Lc  ); rc = 1; break;
-    case 't': Tc   += Delta; ZCHECK(Tc  ); rc = 1; break;
-    case 'T': Tc   -= Delta; ZCHECK(Tc  ); rc = 1; break;
-    case 'm': Mc   += Delta; ZCHECK(Mc  ); rc = 1; break;
-    case 'M': Mc   -= Delta; ZCHECK(Mc  ); rc = 1; break;
-    case 'z': ExpZ += Delta; ZCHECK(ExpZ); rc = 1; break;
-    case 'Z': ExpZ -= Delta; ZCHECK(ExpZ); rc = 1; break;
-    case 'u': ExpU += Delta; ZCHECK(ExpU); rc = 1; break;
-    case 'U': ExpU -= Delta; ZCHECK(ExpU); rc = 1; break;
+    case 'c': Lc   += Delta; INTCHECK(Lc  ); rc = 1; break;
+    case 'C': Lc   -= Delta; INTCHECK(Lc  ); rc = 1; break;
+    case 't': Tc   += Delta; INTCHECK(Tc  ); rc = 1; break;
+    case 'T': Tc   -= Delta; INTCHECK(Tc  ); rc = 1; break;
+    case 'm': Mc   += Delta; INTCHECK(Mc  ); rc = 1; break;
+    case 'M': Mc   -= Delta; INTCHECK(Mc  ); rc = 1; break;
+    case 'z': ExpZ += Delta; INTCHECK(ExpZ); rc = 1; break;
+    case 'Z': ExpZ -= Delta; INTCHECK(ExpZ); rc = 1; break;
+    case 'u': ExpU += Delta; INTCHECK(ExpU); rc = 1; break;
+    case 'U': ExpU -= Delta; INTCHECK(ExpU); rc = 1; break;
 #if 0
-    case 'x': ExpX += Delta; ZCHECK(ExpX); XY = 1; break;
-    case 'X': ExpX -= Delta; ZCHECK(ExpX); XY = 1; break;
-    case 'y': ExpY += Delta; ZCHECK(ExpY); XY = 1; break;
-    case 'Y': ExpY -= Delta; ZCHECK(ExpY); XY = 1; break;
+    case 'x': ExpX += Delta; INTCHECK(ExpX); XY = 1; break;
+    case 'X': ExpX -= Delta; INTCHECK(ExpX); XY = 1; break;
+    case 'y': ExpY += Delta; INTCHECK(ExpY); XY = 1; break;
+    case 'Y': ExpY -= Delta; INTCHECK(ExpY); XY = 1; break;
 #endif
-    case 'n': Ny   += Delta; ZCHECK(Ny  ); XY = 2; break;
-    case 'N': Ny   -= Delta; ZCHECK(Ny  ); XY = 2; break;
-    case 'b': Beta += Delta; ZCHECK(Beta); XY = 2; break;
-    case 'B': Beta -= Delta; ZCHECK(Beta); XY = 2; break;
+    case 'n': Ny   += Delta; INTCHECK(Ny  ); XY = 2; break;
+    case 'N': Ny   -= Delta; INTCHECK(Ny  ); XY = 2; break;
+    case 'b': Beta += Delta; INTCHECK(Beta); XY = 2; break;
+    case 'B': Beta -= Delta; INTCHECK(Beta); XY = 2; break;
     case 'l': Lines = (Lines + 1) % 3; rd = 1; break;
     case 'g': Grid    ^= 1; rd = 1; break;
     case 'v': ShowVar ^= 1; rc = 1; break;
