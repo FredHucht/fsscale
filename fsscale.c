@@ -2,9 +2,13 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995-2001
  *
- * $Id: fsscale.c,v 2.55 2002/06/04 10:25:32 fred Exp fred $
+ * $Id: fsscale.c,v 2.56 2002-06-05 11:11:35+02 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.56  2002-06-05 11:11:35+02  fred
+ * Added new log corrections, added reduced temperature '/', removed "*"
+ * in labels
+ *
  * Revision 2.55  2002/06/04 10:25:32  fred
  * log() -> ALog()
  *
@@ -175,7 +179,7 @@
  */
 /*#pragma OPTIONS inline+Pow*/
 
-char   *RCSId = "$Id: fsscale.c,v 2.55 2002/06/04 10:25:32 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.56 2002-06-05 11:11:35+02 fred Exp fred $";
 
 /* Note: AIX: Ignore warnings "No function prototype given for 'finite'" See math.h, line 429 */
 
@@ -365,7 +369,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.55 $ (C) Fred Hucht 1995-2002\n"
+	    "$Revision: 2.56 $ (C) Fred Hucht 1995-2002\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
@@ -1804,7 +1808,7 @@ void ProcessQueue(NumParams *p, GraphParams *g) {
       p->Lx = p->Ly = p->Lm = p->Lz = p->LLx = p->LLy = 0;
       p->Dx = p->Dy = p->Du = 0;
       p->Xf = p->Yf = 1.0;
-      p->Lsf = 0; p->Xs = 1; p->Lxs = 0;
+      p->Lsf = 0; p->Xs = 0; p->Lxs = 0;
       g->Active = p->AutoExp = AOff;
       activei = 0;
       todo  = ReCa;
