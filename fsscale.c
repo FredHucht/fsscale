@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995, 1996
  *
- * $Id: fsscale.c,v 2.22 1997/03/12 18:20:20 fred Exp fred $
+ * $Id: fsscale.c,v 2.23 1997-04-29 16:06:35+02 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.23  1997-04-29 16:06:35+02  fred
+ * log(L) -> log(Names[0])
+ *
  * Revision 2.22  1997/03/12 18:20:20  fred
  * Added xmgr stuff
  *
@@ -189,7 +192,7 @@ int    Swh, FontH, FontD;
 char   *Title = "FSScale";
 char   *Progname;
 char   *Font  = "-*-Times-Medium-R-Normal--*-120-*-*-*-*-*-*";
-char   *RCSId = "$Id: fsscale.c,v 2.22 1997/03/12 18:20:20 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.23 1997-04-29 16:06:35+02 fred Exp fred $";
 char   GPName[256]   = "";
 char   XmgrName[256] = "";
 
@@ -248,7 +251,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.22 $ (C) Fred Hucht 1995, 1996\n"
+	    "$Revision: 2.23 $ (C) Fred Hucht 1995, 1996\n"
 	    "\n"
 	    "%s reads three column data from standard input.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension\n"
@@ -269,9 +272,9 @@ void Usage(int verbose) {
 	    "  -y y                Preset Exponent y (default: 1)\n"
 	    "  -m m                Preset Exponent m (default: 1)\n"
 	    "  -A i1,i2,...        Define which variables can be activated using\n"
-	    "                      pad4/pad6 (see below). Use 1,4,10 for Tc,x,y\n"
-	    "                      0:Xsign 1:Tc 2:z 3:Lc 4:x\n"
-	    "                      7:Ysign 8:Mc 9:u 10:y 13:m\n"
+	    "                      pad4/pad6 (see below). Use 2,5,11 for Tc,x,y\n"
+	    "                      1:Xsign 2:Tc  3:z  4:Lc 5:x\n"
+	    "                      8:Ysign 9:Mc 10:u 11:y 14:m\n"
 	    /*"  -n Ny              Preset Ny\n"
 	      "  -b Beta            Preset Beta/Gamma\n"*/
 	    /*"  -g                 Change from Ny/Beta to Ny/Gamma\n"*/
@@ -356,9 +359,17 @@ void GetArgs(int argc, char *argv[]) {
     case 'A':
       {
 	int a = 1; /* El. 0 is dummy */
-	char *s;
-	Actives[a++] = atoi(strtok(optarg, ","));
-	while(s = strtok(NULL, ",")) Actives[a++] = atoi(s);
+	char *s, *arg = optarg;
+	while(s = strtok(arg, ",")) {
+	  int i = atoi(s);
+	  if(i < 1 || i > NUMACTIVE - 1) {
+	    fprintf(stderr, "%s: Params of option -A must be [1,%d]\n",
+		    Progname, NUMACTIVE - 1);
+	    exit(1);
+	  }
+	  Actives[a++] = i;
+	  arg = NULL;
+	}
 	NumActive = a;
 	optA = 1;
       }
