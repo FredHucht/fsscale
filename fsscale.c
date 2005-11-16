@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995-2002
  *
- * $Id: fsscale.c,v 2.68 2004-05-18 12:20:28+02 fred Exp fred $
+ * $Id: fsscale.c,v 2.69 2004-07-01 17:12:14+02 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.69  2004-07-01 17:12:14+02  fred
+ * Added DXs, DYs
+ *
  * Revision 2.68  2004-05-18 12:20:28+02  fred
  * Added Write/Read of active (shown) data sets
  *
@@ -217,7 +220,7 @@
  */
 /*#pragma OPTIONS inline+Pow*/
 
-char   *RCSId = "$Id: fsscale.c,v 2.68 2004-05-18 12:20:28+02 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.69 2004-07-01 17:12:14+02 fred Exp fred $";
 
 /* Note: AIX: Ignore warnings "No function prototype given for 'finite'"
  * From math.h:
@@ -584,7 +587,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.68 $ (C) Fred Hucht 1995-2002\n"
+	    "$Revision: 2.69 $ (C) Fred Hucht 1995-2002\n"
 	    "\n"
 	    "%s reads three column data from standard input or from command specified with '-c'.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension L\n"
@@ -821,6 +824,7 @@ void GraphInit(GraphParams *g) {
   };
   
   putenv("YGL_GC=1"); /* To speed up dotted lines */
+  putenv("YGL_FT=0"); /* problems with popen() and virtual timer */
   
   minsize(g->XSize, g->YSize);
   g->MainW = winopen(g->Title);
@@ -874,8 +878,10 @@ void ReadData(NumParams *p) {
   p->S   = -1;
   s      = p->Set;
   
-  while (!feof(tn)) {
-    fgets(buf, sizeof(buf), tn);
+  while (fgets(buf, sizeof(buf), tn)) {
+#if 0
+    fprintf(stdout, "%s", buf);
+#endif
     lineno++;
     if (buf[0] != '#') {
       double L, T, M, D = 0.0;
@@ -914,18 +920,25 @@ void ReadData(NumParams *p) {
       } /*else if (n == 0) {
 	  oldL = NODATA;
 	  }*/
+      else {
+	printf("error: %s\n", buf);
+      }
     }
   }
+  if (!feof(tn)) {
+    perror("ReadData");
+  }
+  if (p->Command[0] != '\0') {
+    pclose(tn);
+    /*printf("pclose(0x%x):%d\n", tn, pclose(tn));*/
+  }
+  
   p->S++;
   if (p->S == 0) {
     fprintf(stderr, "%s: No Data.\n", p->Progname);
     exit(1);
   }
   
-  if (p->Command[0] != '\0') {
-    pclose(tn);
-  }
-
   if (p->Inactives[0] != '\0') {
     char inactives[1024], *str;
     strncpy(inactives, p->Inactives, sizeof(inactives));
