@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995-2002
  *
- * $Id: fsscale.c,v 2.69 2004-07-01 17:12:14+02 fred Exp fred $
+ * $Id: fsscale.c,v 2.70 2005-11-16 11:38:39+01 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.70  2005-11-16 11:38:39+01  fred
+ * Fixed problem with virtual timer and popen() at least under MacOSX
+ *
  * Revision 2.69  2004-07-01 17:12:14+02  fred
  * Added DXs, DYs
  *
@@ -220,7 +223,7 @@
  */
 /*#pragma OPTIONS inline+Pow*/
 
-char   *RCSId = "$Id: fsscale.c,v 2.69 2004-07-01 17:12:14+02 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.70 2005-11-16 11:38:39+01 fred Exp fred $";
 
 /* Note: AIX: Ignore warnings "No function prototype given for 'finite'"
  * From math.h:
@@ -587,7 +590,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.69 $ (C) Fred Hucht 1995-2002\n"
+	    "$Revision: 2.70 $ (C) Fred Hucht 1995-2002\n"
 	    "\n"
 	    "%s reads three column data from standard input or from command specified with '-c'.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension L\n"
@@ -1044,11 +1047,11 @@ void Calculate(NumParams *p) {
 	d->x = Lx * Pow(t, p->Z) * PowLog(t, p->Lz) + Lxs * Pow(t, p->Zs);
 	d->y = Ly * Pow(t, p->M) * PowLog(t, p->Lm)
 	  * Pow(m, p->U + p->DU * s->D) + Lys * Pow(m, p->Us);
-      }
-      
-      if (finite(d->x) && finite(d->y)) {
-	SetMinMax(&p->XX, d->x, d->y);
-	SetMinMax(&p->YY, d->y, d->x);
+	
+	if (finite(d->x) && finite(d->y)) {
+	  SetMinMax(&p->XX, d->x, d->y);
+	  SetMinMax(&p->YY, d->y, d->x);
+	}
       }
     }
   }
