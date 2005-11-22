@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995-2002
  *
- * $Id: fsscale.c,v 2.71 2005-11-17 13:42:53+01 fred Exp fred $
+ * $Id: fsscale.c,v 2.72 2005-11-22 18:23:06+01 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.72  2005-11-22 18:23:06+01  fred
+ * Added Ms, Lms; cleanup in Calculate()
+ *
  * Revision 2.71  2005-11-17 13:42:53+01  fred
  * Ignore scaling function (L==0) in autoscale
  *
@@ -226,7 +229,7 @@
  */
 /*#pragma OPTIONS inline+Pow*/
 
-char   *RCSId = "$Id: fsscale.c,v 2.71 2005-11-17 13:42:53+01 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.72 2005-11-22 18:23:06+01 fred Exp fred $";
 
 /* Note: AIX: Ignore warnings "No function prototype given for 'finite'"
  * From math.h:
@@ -595,7 +598,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.71 $ (C) Fred Hucht 1995-2002\n"
+	    "$Revision: 2.72 $ (C) Fred Hucht 1995-2005\n"
 	    "\n"
 	    "%s reads three column data from standard input or from command specified with '-c'.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension L\n"
