@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995-2002
  *
- * $Id: fsscale.c,v 2.70 2005-11-16 11:38:39+01 fred Exp fred $
+ * $Id: fsscale.c,v 2.71 2005-11-17 13:42:53+01 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.71  2005-11-17 13:42:53+01  fred
+ * Ignore scaling function (L==0) in autoscale
+ *
  * Revision 2.70  2005-11-16 11:38:39+01  fred
  * Fixed problem with virtual timer and popen() at least under MacOSX
  *
@@ -223,7 +226,7 @@
  */
 /*#pragma OPTIONS inline+Pow*/
 
-char   *RCSId = "$Id: fsscale.c,v 2.70 2005-11-16 11:38:39+01 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.71 2005-11-17 13:42:53+01 fred Exp fred $";
 
 /* Note: AIX: Ignore warnings "No function prototype given for 'finite'"
  * From math.h:
@@ -323,13 +326,13 @@ typedef struct NumParams_ {
   double VarFactor;
   int    L0_only_in_log;
   double Vardummy,
-    /**/d, L0, Xf, Tc, Z, Lz, Lc, X, DX, Lx, LLx, Lxsf, Zs, Xs, DXs, Lxs, Yf, Mc, U, DU, Y, DY, Ly, LLy, M, Lm, Lysf, Us, Ys, DYs, Lys;
+    /**/d, L0, Xf, Tc, Z, Lz, Lc, X, DX, Lx, LLx, Lxsf, Zs, Xs, DXs, Lxs, Yf, Mc, U, DU, Y, DY, Ly, LLy, M, Lm, Lysf, Us, Ys, DYs, Lys, Ms, Lms;
   double ReduceT; /* Must be behind Vars for Read/WriteParams */
 } NumParams;
 enum ActiveNames {
 #define ActiveDefaults /* see start of main() */ \
- {AOff,Ad,AL0,AXf,ATc,AZ,ALz,ALc,AX,    ALx,ALLx,ALxsf,AZs,AXs,     ALxs,AYf,AMc,AU,    AY,    ALy,ALLy,AM,ALm,ALysf,AUs,AYs,     ALys}
-  AOff,Ad,AL0,AXf,ATc,AZ,ALz,ALc,AX,ADX,ALx,ALLx,ALxsf,AZs,AXs,ADXs,ALxs,AYf,AMc,AU,ADU,AY,ADY,ALy,ALLy,AM,ALm,ALysf,AUs,AYs,ADYs,ALys,
+ {AOff,Ad,AL0,AXf,ATc,AZ,ALz,ALc,AX,    ALx,ALLx,ALxsf,AZs,AXs,     ALxs,AYf,AMc,AU,    AY,    ALy,ALLy,AM,ALm,ALysf,AUs,AYs,     ALys,AMs,ALms}
+  AOff,Ad,AL0,AXf,ATc,AZ,ALz,ALc,AX,ADX,ALx,ALLx,ALxsf,AZs,AXs,ADXs,ALxs,AYf,AMc,AU,ADU,AY,ADY,ALy,ALLy,AM,ALm,ALysf,AUs,AYs,ADYs,ALys,AMs,ALms,
   ALast
 };
 
@@ -368,6 +371,8 @@ struct Defaults_ {
 		"Ys",  0,
 		"DYs", 0,
 		"Lys", 0,
+		"Ms",  0,
+		"Lms", 0,
 		"ReduceT", 0
 };
 
@@ -590,7 +595,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.70 $ (C) Fred Hucht 1995-2002\n"
+	    "$Revision: 2.71 $ (C) Fred Hucht 1995-2002\n"
 	    "\n"
 	    "%s reads three column data from standard input or from command specified with '-c'.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension L\n"
@@ -962,7 +967,7 @@ void SetMinMax(struct MinMax_ *X, double x, double y) {
 }
 
 #if 1
-double Pow(double x, double y) {
+inline double Pow(double x, double y) {
   return
     y == 0.0 ? 1.0 :
     y == 1.0 ? x :
@@ -991,18 +996,18 @@ double Pow(double x, double y) {
 }
 #endif
 
-double ALog(double x) {
+inline double ALog(double x) {
   return fabs(log(x));
 }
 
-double PowLog(double x, double y) {
+inline double PowLog(double x, double y) {
   return
     y == 0.0 ? 1.0 :
     y == 1.0 ? ALog(x) :
     pow(ALog(x), y);
 }
 
-double PowLogLog(double x, double y) {
+inline double PowLogLog(double x, double y) {
   return
     y == 0.0 ? 1.0 :
     y == 1.0 ? ALog(ALog(x)) :
@@ -1019,34 +1024,35 @@ void Calculate(NumParams *p) {
   
   for (i = 0; i < p->S; i++) if (p->Set[i].active) {
     Set_t *s  = &p->Set[i];
-    double ll, l, Lx, Ly, Lxs, Lys;
     
     if (s->L == 0) { /* scaling function */
-      ll = l = Lx = Ly = Lxs = Lys = 0;
-    } else {
+      for (j = 0; j < s->N; j++) {
+	const Data_t *ds = &s->Data[j];
+	Data_t *d  = &s->Data[j];
+	d->x = ds->T;
+	d->y = ds->M * Pow(ds->T, p->M);
+      }
+    } else { /* normal data set */
+      double ll, l, Lx, Ly, Lxs, Lys;
       ll  = s->L / p->L0 - p->Lc;
       l   = p->L0_only_in_log ? s->L - p->Lc : ll;
       Lx  = p->Xf * Pow(l, p->X + p->DX * s->D) * PowLog(ll, p->Lx) * PowLogLog(ll, p->LLx);
       Ly  = p->Yf * Pow(l, p->Y + p->DY * s->D) * PowLog(ll, p->Ly) * PowLogLog(ll, p->LLy);
       Lxs = p->Xf * p->Lxsf * Pow(l, p->Xs + p->DXs * s->D) * PowLog(ll, p->Lxs);
       Lys = p->Yf * p->Lysf * Pow(l, p->Ys + p->DYs * s->D) * PowLog(ll, p->Lys);
-    }
-    
-    for (j = 0; j < s->N; j++) {
-      const Data_t *ds = &s->Data[j];
-      Data_t *d  = &s->Data[Lx >= 0 ? j : s->N - 1 - j];
-      double t = ds->T - p->Tc;
-      double m = ds->M - p->Mc;
       
-      if (p->ReduceT != 0 && p->Tc) t /= p->Tc;
-      
-      if (s->L == 0) { /* scaling function */
-	d->x = ds->T;
-	d->y = ds->M * Pow(ds->T, p->M);
-      } else {
-	d->x = Lx * Pow(t, p->Z) * PowLog(t, p->Lz) + Lxs * Pow(t, p->Zs);
-	d->y = Ly * Pow(t, p->M) * PowLog(t, p->Lm)
-	  * Pow(m, p->U + p->DU * s->D) + Lys * Pow(m, p->Us);
+      for (j = 0; j < s->N; j++) {
+	const Data_t *ds = &s->Data[j];
+	Data_t *d  = &s->Data[Lx >= 0 ? j : s->N - 1 - j];
+	double t = ds->T - p->Tc;
+	double m = ds->M - p->Mc;
+	
+	if (p->ReduceT != 0 && p->Tc) t /= p->Tc;
+	
+	d->x = Lx  * Pow(t, p->Z)  * PowLog(t, p->Lz)
+	  +    Lxs * Pow(t, p->Zs);
+	d->y = Ly  * Pow(t, p->M)  * PowLog(t, p->Lm)  * Pow(m, p->U + p->DU * s->D)
+	  +    Lys * Pow(t, p->Ms) * PowLog(t, p->Lms) * Pow(m, p->Us);
 	
 	if (finite(d->x) && finite(d->y)) {
 	  SetMinMax(&p->XX, d->x, d->y);
@@ -1512,6 +1518,10 @@ void DrawMain(const NumParams *p, GraphParams *g) {
     WriteTerm(p, g, NULL, ALc, 0, AYs,  ADYs,  xy);
     /* log(L - Lc)^Lys */
     WriteTerm(p, g, "alog", ALc, 0, ALys, AOff, xy);
+    /* (T - Tc)^Ms */
+    WriteTerm(p, g, NULL, ATc, 0, AMs, AOff, xy);
+    /* log(T - Tc)^Lms */
+    WriteTerm(p, g, "alog", ATc, 0, ALms, AOff, xy);
   }
   if (g->ShowZero || CI(AYf) || p->Yf != 1.0) {
     g->Labi[1] += sprintf(g->Lab[1] + g->Labi[1], "]");
