@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995-2002
  *
- * $Id: fsscale.c,v 2.72 2005-11-22 18:23:06+01 fred Exp fred $
+ * $Id: fsscale.c,v 2.73 2005-11-22 18:25:42+01 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.73  2005-11-22 18:25:42+01  fred
+ * *** empty log message ***
+ *
  * Revision 2.72  2005-11-22 18:23:06+01  fred
  * Added Ms, Lms; cleanup in Calculate()
  *
@@ -229,7 +232,7 @@
  */
 /*#pragma OPTIONS inline+Pow*/
 
-char   *RCSId = "$Id: fsscale.c,v 2.72 2005-11-22 18:23:06+01 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.73 2005-11-22 18:25:42+01 fred Exp fred $";
 
 /* Note: AIX: Ignore warnings "No function prototype given for 'finite'"
  * From math.h:
@@ -493,7 +496,12 @@ void WriteParams(const NumParams *p, const GraphParams *g) {
     n++;
   }
   
-  for (a = 0; a < 3; a++) if (g->Names[a][0] != '\0') {
+  if (p->NumRows == 4) {
+    fprintf(tn, "numrows = 4\n");
+    n++;
+  }
+  
+  for (a = 0; a < p->NumRows; a++) if (g->Names[a][0] != '\0') {
     fprintf(tn, "name%d = %s\n", a, g->Names[a]);
     n++;
   }
@@ -512,7 +520,7 @@ void WriteParams(const NumParams *p, const GraphParams *g) {
     fprintf(tn, "l0onlyinlog = 1\n");
     n++;
   }
-  
+    
   {
     int inactive = 0;
     for (a = 0; a < p->S; a++) if (!p->Set[a].active) inactive = 1;
@@ -559,9 +567,22 @@ void ReadParams(NumParams *p, GraphParams *g) {
 	}
       } else if (strcmp(name, "cmd") == 0) {
 	strncpy(p->Command, val, sizeof(p->Command));
+      } else if (strcmp(name, "numrows") == 0) {
+	p->NumRows = atoi(val);
+	switch(p->NumRows) {
+	case 4: {
+	  int a;
+	  for (a = 1; a < ALast; a++) g->Actives[a] = a;
+	  g->NumActive = ALast;
+	}
+	  break;
+	default:
+	  p->NumRows = 3;
+	  break;
+	}
       } else if (strncmp(name, "name", 4) == 0
 		 && name[4] >= '0'
-		 && name[4] <= '3') {
+		 && name[4] <= '4') {
 	strncpy(g->Names[name[4] - '0'], val, sizeof(g->Names[0]));
       } else if (strcmp(name, "logx") == 0) {
 	p->LogX = atoi(val);
@@ -598,7 +619,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.72 $ (C) Fred Hucht 1995-2005\n"
+	    "$Revision: 2.73 $ (C) Fred Hucht 1995-2005\n"
 	    "\n"
 	    "%s reads three column data from standard input or from command specified with '-c'.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension L\n"
@@ -1290,6 +1311,7 @@ int charstrC(const char *ctext) {
   return cx;
 }
 
+#if 0
 int charstrH(const char *text, int h) {
   /* superscript/subscript with height h */
   Screencoord cx, cy, r;
@@ -1300,6 +1322,7 @@ int charstrH(const char *text, int h) {
   cmov2i(cx + r, cy);
   return r;
 }
+#endif
 
 int charstrP(const char *text, int h, struct CPos* cpos) {
   /* charstrH with position saved in cpos */
@@ -1363,11 +1386,13 @@ void WriteTerm(const NumParams *p, GraphParams *g,
     /* ^(x + DY D) */
     switch(2 * (all || Vars[ax]||CI(ax) || CI(alc)) + (Vars[adx]||CI(adx))) {
     case 3: /* Both */
-      sprintf(text, "(#%c%g#%c%+g#0 %s)",
-	      CI(ax ) + '0', Vars[ax],
+      sprintf(text, "(#%c%g",
+	      CI(ax ) + '0', Vars[ax]);
+      charstrP(text, g->FontH/2, &g->cpos[ax]);
+      sprintf(text, "#%c%+g#0 %s)",
 	      CI(adx) + '0', Vars[adx],
 	      g->Names[3]);
-      charstrH(text, g->FontH/2);
+      charstrP(text, g->FontH/2, &g->cpos[adx]);
       g->Labi[xy] += sprintf(g->Lab[xy] + g->Labi[xy],
 			     "\\S%g%+g %s\\N",
 			     Vars[ax], Vars[adx], g->Names[3]);
@@ -1397,7 +1422,7 @@ void WriteTerm(const NumParams *p, GraphParams *g,
       break;
     case 1: /* DX */
       sprintf(text, "#%c%g#0 %s", CI(adx) + '0', Vars[adx], g->Names[3]);
-      charstrH(text, g->FontH/2);
+      charstrP(text, g->FontH/2, &g->cpos[adx]);
       g->Labi[xy] += sprintf(g->Lab[xy] + g->Labi[xy],
 			     "\\S%g %s\\N",
 			     Vars[adx], g->Names[3]);
@@ -2240,7 +2265,12 @@ void ProcessQueue(NumParams *p, GraphParams *g) {
       winset(g->MainW);
       gl2ppm("| ppmtogif > fsscale.gif");
       break;
-    case 'Q': 
+    case 'Q':
+      {
+	int a;
+	double *Vars = &p->Vardummy;
+	for (a = 1; a < ALast; a++) Vars[a] = Defaults[a].val;
+      }
       ReadParams(p, g);
       if (p->Command[0] != '\0') ReadData(p);
       todo = ReCa;
