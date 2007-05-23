@@ -1,10 +1,13 @@
 /* -*- mode: c;  c-basic-offset: 2 -*-
  * 
- * Finite Size scaling (C) Fred Hucht 1995-2002
+ * Finite Size scaling (C) Fred Hucht 1995-2007
  *
- * $Id: fsscale.c,v 2.73 2005-11-22 18:25:42+01 fred Exp fred $
+ * $Id: fsscale.c,v 2.74 2005-11-24 19:14:16+01 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.74  2005-11-24 19:14:16+01  fred
+ * Added -4 support to params files, reset vars on 'Q'
+ *
  * Revision 2.73  2005-11-22 18:25:42+01  fred
  * *** empty log message ***
  *
@@ -232,7 +235,7 @@
  */
 /*#pragma OPTIONS inline+Pow*/
 
-char   *RCSId = "$Id: fsscale.c,v 2.73 2005-11-22 18:25:42+01 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.74 2005-11-24 19:14:16+01 fred Exp fred $";
 
 /* Note: AIX: Ignore warnings "No function prototype given for 'finite'"
  * From math.h:
@@ -244,7 +247,9 @@ char   *RCSId = "$Id: fsscale.c,v 2.73 2005-11-22 18:25:42+01 fred Exp fred $";
 #include <X11/Ygl.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <malloc.h>
+#ifdef USE_MALLOC_H
+# include <malloc.h>
+#endif
 #include <math.h>
 #include <float.h>
 #include <string.h>
@@ -619,7 +624,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.73 $ (C) Fred Hucht 1995-2005\n"
+	    "$Revision: 2.74 $ (C) Fred Hucht 1995-2005\n"
 	    "\n"
 	    "%s reads three column data from standard input or from command specified with '-c'.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension L\n"
