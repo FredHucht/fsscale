@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995-2007
  *
- * $Id: fsscale.c,v 2.74 2005-11-24 19:14:16+01 fred Exp fred $
+ * $Id: fsscale.c,v 2.75 2007-05-23 17:02:26+02 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.75  2007-05-23 17:02:26+02  fred
+ * Removed reference to <malloc.h>
+ *
  * Revision 2.74  2005-11-24 19:14:16+01  fred
  * Added -4 support to params files, reset vars on 'Q'
  *
@@ -235,7 +238,7 @@
  */
 /*#pragma OPTIONS inline+Pow*/
 
-char   *RCSId = "$Id: fsscale.c,v 2.74 2005-11-24 19:14:16+01 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.75 2007-05-23 17:02:26+02 fred Exp fred $";
 
 /* Note: AIX: Ignore warnings "No function prototype given for 'finite'"
  * From math.h:
@@ -417,8 +420,9 @@ typedef struct GraphParams_ {
   Int32 XPos,   YPos;
   Int32 PXSize, PYSize;
   Int32 PXPos,  PYPos;
-  char  Lab[2][256];
+#define LABLEN 2028
   int   Labi[2];
+  char  Lab[2][LABLEN];
   Int32 MainW, PlotW;
   int   Swh, FontH, FontD;
   int   ShowVar;
@@ -624,7 +628,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.74 $ (C) Fred Hucht 1995-2005\n"
+	    "$Revision: 2.75 $ (C) Fred Hucht 1995-2005\n"
 	    "\n"
 	    "%s reads three column data from standard input or from command specified with '-c'.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension L\n"
@@ -1356,7 +1360,7 @@ void WriteTerm(const NumParams *p, GraphParams *g,
   if (all || Vars[ax]||CI(ax) || Vars[adx]||CI(adx) || (CI(alc) && alc0)) {
     int times = g->Labi[xy] > 1 || (g->Labi[xy] == 1 && g->Lab[xy][0] != '-');
     char timesstr[] = " "; /* " * " */
-    char text[256], lmlc[80];
+    char text[LABLEN], lmlc[80];
     const char *name;
     
     switch (alc) {
@@ -1438,7 +1442,7 @@ void WriteTerm(const NumParams *p, GraphParams *g,
 
 void DrawMain(const NumParams *p, GraphParams *g) {
   int i, xy;
-  char text[256];
+  char text[LABLEN];
   
   winset(g->MainW);
   color(g->BgColor);
@@ -1579,6 +1583,13 @@ void DrawMain(const NumParams *p, GraphParams *g) {
   }  
   
   sleep(0);
+
+  if ((g->Labi[0] > LABLEN) || (g->Labi[1] > LABLEN)) {
+    fprintf(stderr, 
+	    "fsscale: Fatal: Array Lab[][] too small, enlarge LABLEN and recompile (%d,%d)\n",
+	    g->Labi[0], g->Labi[1]);
+    exit(1);
+  }
 }
 
 void checked_v2d(const NumParams *p, double x0, double x1, double dm[2][2]) {
@@ -1652,7 +1663,7 @@ void AutoScale(NumParams *p) {
 
 void DrawPlot(NumParams *p) {
   int i, j, k;
-  char text[256];
+  char text[LABLEN];
   double x, y;
   double dm[2][2];
   
@@ -2456,7 +2467,7 @@ void write_xmgr(void) {
   FILE *xmgrfile;
   int i, j, k;
   char *logtype[2][2] = {{"xy", "logy"}, {"logx", "logxy"}};
-  char xlab[128], ylab[128];
+  char xlab[LABLEN], ylab[LABLEN];
   
   if ((xmgrfile = fopen(Gp->XmgrName, "w")) == NULL) {
     perror(Gp->XmgrName);
@@ -2596,7 +2607,7 @@ void write_gnuplot(void) {
   FILE *gpfile;
   int i, j, first;
   const char *styles[] = { "points", "lines", "linespoints" };
-  char xlab[128], ylab[128];
+  char xlab[LABLEN], ylab[LABLEN];
   
   if ((gpfile = fopen(Gp->GPName, "w")) == NULL) {
     perror(Gp->GPName);
