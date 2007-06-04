@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995-2007
  *
- * $Id: fsscale.c,v 2.75 2007-05-23 17:02:26+02 fred Exp fred $
+ * $Id: fsscale.c,v 2.76 2007-06-01 12:24:33+02 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.76  2007-06-01 12:24:33+02  fred
+ * LABLEN
+ *
  * Revision 2.75  2007-05-23 17:02:26+02  fred
  * Removed reference to <malloc.h>
  *
@@ -238,7 +241,7 @@
  */
 /*#pragma OPTIONS inline+Pow*/
 
-char   *RCSId = "$Id: fsscale.c,v 2.75 2007-05-23 17:02:26+02 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.76 2007-06-01 12:24:33+02 fred Exp fred $";
 
 /* Note: AIX: Ignore warnings "No function prototype given for 'finite'"
  * From math.h:
@@ -353,41 +356,41 @@ enum ActiveNames {
 struct Defaults_ {
   char *name;
   double val;
-} Defaults[] = {"",    0,
-		"d", 0.1,
-		"L0",  1,
-		"Xf",  1,
-		"Tc",  0,
-		"Z",   1,
-		"Lz",  0,
-		"Lc",  0,
-		"X",   0,
-		"DX",  0,
-		"Lx",  0,
-		"LLx", 0,
-		"Lxsf",0,
-		"Zs",  0,
-		"Xs",  0,
-		"DXs", 0,
-		"Lxs", 0,
-		"Yf",  1,
-		"Mc",  0,
-		"U",   1,
-		"DU",  0,
-		"Y",   0,
-		"DY",  0,
-		"Ly",  0,
-		"LLy", 0,
-		"M",   0,
-		"Lm",  0,
-		"Lysf", 0,
-		"Us",  0,
-		"Ys",  0,
-		"DYs", 0,
-		"Lys", 0,
-		"Ms",  0,
-		"Lms", 0,
-		"ReduceT", 0
+} Defaults[] = {{"",    0},
+		{"d", 0.1},
+		{"L0",  1},
+		{"Xf",  1},
+		{"Tc",  0},
+		{"Z",   1},
+		{"Lz",  0},
+		{"Lc",  0},
+		{"X",   0},
+		{"DX",  0},
+		{"Lx",  0},
+		{"LLx", 0},
+		{"Lxsf",0},
+		{"Zs",  0},
+		{"Xs",  0},
+		{"DXs", 0},
+		{"Lxs", 0},
+		{"Yf",  1},
+		{"Mc",  0},
+		{"U",   1},
+		{"DU",  0},
+		{"Y",   0},
+		{"DY",  0},
+		{"Ly",  0},
+		{"LLy", 0},
+		{"M",   0},
+		{"Lm",  0},
+		{"Lysf",0},
+		{"Us",  0},
+		{"Ys",  0},
+		{"DYs", 0},
+		{"Lys", 0},
+		{"Ms",  0},
+		{"Lms", 0},
+		{"ReduceT", 0}
 };
 
 enum RecalcNames {
@@ -628,7 +631,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.75 $ (C) Fred Hucht 1995-2005\n"
+	    "$Revision: 2.76 $ (C) Fred Hucht 1995-2005\n"
 	    "\n"
 	    "%s reads three column data from standard input or from command specified with '-c'.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension L\n"
@@ -1120,46 +1123,48 @@ double Valuate(NumParams *p) {
   if (p->FullFit || fmax > p->XX.max) fmax = p->XX.max;
   
   p->AV = 1 - p->AV;
-  for (i = 0; i < p->S; i++) if (p->Set[i].active) if (!p->Set[i].sorted) {
-    fprintf(stderr,
-	    "Dataset %d (%s = %g) not sorted, can't include into variance.\n",
-	    i, Gp->Names[0], p->Set[i].L);
-  } else {
-    Set_t *s  = &p->Set[i];
-    double m = 0.0;
-    int ja;
-    
-    for (k = j = ja = 0; k < ASZ; k++) {
-      struct Var_ *var = &p->Var[p->AV][k];
-      if (p->LogX) {
-	/*x = exp(log(XX.minXp) + k * (log(XX.max / XX.minXp)) / ASZ);*/
-	var->x = fmin * pow(fmax / fmin, (double)k / ASZ);
-      } else {
-	var->x = fmin + k * (fmax - fmin) / ASZ;
-      }
-      if (var->x <  s->Data[0     ].x ||
-	  var->x >= s->Data[s->N-1].x) {
-	s->Fit[k] = NODATA;
-      } else {
-	if (s->Data[j].x <= var->x && j + 1 < s->N) {
-	  ja = j;
-	  while (s->Data[j].x <= var->x && j + 1 < s->N) j++;
-	  if (ja == 0 && !p->FullFit) ja = j - 1; /* ??? */
-	  if (p->LogX) {
-	    m = log10(s->Data[j].y / s->Data[ja].y)
-	      / log10(s->Data[j].x / s->Data[ja].x);
-	  } else {
-	    m = (s->Data[j].y - s->Data[ja].y)
-	      / (s->Data[j].x - s->Data[ja].x);
-	  }
-	}
+  for (i = 0; i < p->S; i++) if (p->Set[i].active) {
+    if (!p->Set[i].sorted) {
+      fprintf(stderr,
+	      "Dataset %d (%s = %g) not sorted, can't include into variance.\n",
+	      i, Gp->Names[0], p->Set[i].L);
+    } else {
+      Set_t *s  = &p->Set[i];
+      double m = 0.0;
+      int ja;
+      
+      for (k = j = ja = 0; k < ASZ; k++) {
+	struct Var_ *var = &p->Var[p->AV][k];
 	if (p->LogX) {
-	  /* exp10(log10(s->Data[ja].y) + m * (log10(x) - log10(s->Data[ja].x))) */
-	  s->Fit[k] = s->Data[ja].y * pow(var->x / s->Data[ja].x, m);
+	  /*x = exp(log(XX.minXp) + k * (log(XX.max / XX.minXp)) / ASZ);*/
+	  var->x = fmin * pow(fmax / fmin, (double)k / ASZ);
 	} else {
-	  s->Fit[k] = s->Data[ja].y + (var->x - s->Data[ja].x) * m;
+	  var->x = fmin + k * (fmax - fmin) / ASZ;
 	}
-	if(!finite(s->Fit[k])) s->Fit[k] = NODATA;
+	if (var->x <  s->Data[0     ].x ||
+	    var->x >= s->Data[s->N-1].x) {
+	  s->Fit[k] = NODATA;
+	} else {
+	  if (s->Data[j].x <= var->x && j + 1 < s->N) {
+	    ja = j;
+	    while (s->Data[j].x <= var->x && j + 1 < s->N) j++;
+	    if (ja == 0 && !p->FullFit) ja = j - 1; /* ??? */
+	    if (p->LogX) {
+	      m = log10(s->Data[j].y / s->Data[ja].y)
+		/ log10(s->Data[j].x / s->Data[ja].x);
+	    } else {
+	      m = (s->Data[j].y - s->Data[ja].y)
+		/ (s->Data[j].x - s->Data[ja].x);
+	    }
+	  }
+	  if (p->LogX) {
+	    /* exp10(log10(s->Data[ja].y) + m * (log10(x) - log10(s->Data[ja].x))) */
+	    s->Fit[k] = s->Data[ja].y * pow(var->x / s->Data[ja].x, m);
+	  } else {
+	    s->Fit[k] = s->Data[ja].y + (var->x - s->Data[ja].x) * m;
+	  }
+	  if(!finite(s->Fit[k])) s->Fit[k] = NODATA;
+	}
       }
     }
   }
@@ -1229,7 +1234,7 @@ double Valuate(NumParams *p) {
 
 void DrawTickX(const NumParams *p, const GraphParams *g, double x, int level) {
   double len = g->LevelLen[level];
-  if (g->Grid == 2 || g->Grid == 1 && level == 0) {
+  if (g->Grid == 2 || (g->Grid == 1 && level == 0)) {
     setlinestyle(2 + level);
     move2(x, p->OYmin); draw2(x, p->OYmax);
     setlinestyle(0);
@@ -1240,7 +1245,7 @@ void DrawTickX(const NumParams *p, const GraphParams *g, double x, int level) {
 
 void DrawTickY(const NumParams *p, const GraphParams *g, double y, int level) {
   double len = g->LevelLen[level];
-  if (g->Grid == 2 || g->Grid == 1 && level == 0) {
+  if (g->Grid == 2 || (g->Grid == 1 && level == 0)) {
     setlinestyle(2 + level);
     move2(p->OXmin, y); draw2(p->OXmax, y);
     setlinestyle(0);
@@ -1336,15 +1341,20 @@ int charstrH(const char *text, int h) {
 int charstrP(const char *text, int h, struct CPos* cpos) {
   /* charstrH with position saved in cpos */
   Screencoord cx, cy, r;
+  int setcpos = cpos->x0 == 0 && cpos->y0 == 0 && cpos->x1 == 0 && cpos->y1 == 0;
   /*getcpos(&cx, &cy); cx -= Gp->XPos; cy -= Gp->YPos;*/
   cx = CX; cy = CY;
-  cpos->x0 = cx;
-  cpos->y0 = cy + h - Gp->FontD;
+  if (setcpos) {
+    cpos->x0 = cx;
+    cpos->y0 = cy + h - Gp->FontD;
+  }
   cmov2i(cx, cy + h);
   r = charstrC(text);
   cmov2i(cx + r, cy);
-  cpos->x1 = cx + r;
-  cpos->y1 = cy + h - Gp->FontD + Gp->FontH;
+  if (setcpos) {
+    cpos->x1 = cx + r;
+    cpos->y1 = cy + h - Gp->FontD + Gp->FontH;
+  }
   return r;
 }
 
@@ -1579,6 +1589,7 @@ void DrawMain(const NumParams *p, GraphParams *g) {
       sprintf(text, s->active ? " %.4g" : " (%.4g)", s->L);
     else
       sprintf(text, s->active ? " %.4g/%.4g" : " (%.4g/%.4g)", s->L, s->D);
+    memset(&s->cpos, 0, sizeof(s->cpos));
     charstrP(text, 0, &s->cpos);
   }  
   
