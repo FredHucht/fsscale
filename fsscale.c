@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995-2007
  *
- * $Id: fsscale.c,v 2.76 2007-06-01 12:24:33+02 fred Exp fred $
+ * $Id: fsscale.c,v 2.77 2007-06-04 13:49:12+02 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.77  2007-06-04 13:49:12+02  fred
+ * *** empty log message ***
+ *
  * Revision 2.76  2007-06-01 12:24:33+02  fred
  * LABLEN
  *
@@ -241,7 +244,7 @@
  */
 /*#pragma OPTIONS inline+Pow*/
 
-char   *RCSId = "$Id: fsscale.c,v 2.76 2007-06-01 12:24:33+02 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.77 2007-06-04 13:49:12+02 fred Exp fred $";
 
 /* Note: AIX: Ignore warnings "No function prototype given for 'finite'"
  * From math.h:
@@ -631,7 +634,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.76 $ (C) Fred Hucht 1995-2005\n"
+	    "$Revision: 2.77 $ (C) Fred Hucht 1995-2005\n"
 	    "\n"
 	    "%s reads three column data from standard input or from command specified with '-c'.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension L\n"
@@ -924,10 +927,10 @@ void ReadData(NumParams *p) {
   
   while (fgets(buf, sizeof(buf), tn)) {
 #if 0
-    fprintf(stdout, "%s", buf);
+    fprintf(stdout, "read %s", buf);
 #endif
     lineno++;
-    if (buf[0] != '#') {
+    if (buf[0] != '#' && buf[0] != '\n') {
       double L, T, M, D = 0.0;
       int n = sscanf(buf, "%lf %lf %lf %lf", &L, &T, &M, &D);
       if (n >= p->NumRows) { /* Valid */
@@ -965,7 +968,8 @@ void ReadData(NumParams *p) {
 	  oldL = NODATA;
 	  }*/
       else {
-	printf("error: %s\n", buf);
+	/* ignore */
+	/* printf("error: %s\n", buf); */
       }
     }
   }
