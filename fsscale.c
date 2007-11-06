@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995-2007
  *
- * $Id: fsscale.c,v 2.77 2007-06-04 13:49:12+02 fred Exp fred $
+ * $Id: fsscale.c,v 2.78 2007-10-31 12:58:13+01 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.78  2007-10-31 12:58:13+01  fred
+ * *** empty log message ***
+ *
  * Revision 2.77  2007-06-04 13:49:12+02  fred
  * *** empty log message ***
  *
@@ -244,7 +247,7 @@
  */
 /*#pragma OPTIONS inline+Pow*/
 
-char   *RCSId = "$Id: fsscale.c,v 2.77 2007-06-04 13:49:12+02 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.78 2007-10-31 12:58:13+01 fred Exp fred $";
 
 /* Note: AIX: Ignore warnings "No function prototype given for 'finite'"
  * From math.h:
@@ -634,7 +637,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.77 $ (C) Fred Hucht 1995-2005\n"
+	    "$Revision: 2.78 $ (C) Fred Hucht 1995-2005\n"
 	    "\n"
 	    "%s reads three column data from standard input or from command specified with '-c'.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension L\n"
@@ -1921,13 +1924,17 @@ int ChangeActive(NumParams *p, const GraphParams *g, double delta) {
     p->d *= delta > 0 ? 10.0 : 0.1;
     ret = p->AutoExp ? ReCa : ReMa;
     break;
-    /*  case AXf:
-	case AYf:
-	Vars[g->Active] = delta > 0 ? 1.0 : -1.0;
-	break;*/
   default:
     Vars[g->Active] += delta;
     INTCHECK(Vars[g->Active]);
+    if ( g->Active == AL0 && Vars[g->Active] <= 0 ) {
+      Vars[g->Active] -= delta; /* undo */
+      INTCHECK(Vars[g->Active]);
+    }
+    if ( (g->Active == AXf || g->Active == AYf) && Vars[g->Active] == 0 ) {
+      Vars[g->Active] += delta; /* skip 0 */
+      INTCHECK(Vars[g->Active]);
+    }
     break;
   }
   return ret;
