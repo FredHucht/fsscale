@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995-2007
  *
- * $Id: fsscale.c,v 2.78 2007-10-31 12:58:13+01 fred Exp fred $
+ * $Id: fsscale.c,v 2.79 2007-11-06 15:59:07+01 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.79  2007-11-06 15:59:07+01  fred
+ * Check for L0,Xf,Yf == 0
+ *
  * Revision 2.78  2007-10-31 12:58:13+01  fred
  * *** empty log message ***
  *
@@ -247,7 +250,7 @@
  */
 /*#pragma OPTIONS inline+Pow*/
 
-char   *RCSId = "$Id: fsscale.c,v 2.78 2007-10-31 12:58:13+01 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.79 2007-11-06 15:59:07+01 fred Exp fred $";
 
 /* Note: AIX: Ignore warnings "No function prototype given for 'finite'"
  * From math.h:
@@ -637,7 +640,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.78 $ (C) Fred Hucht 1995-2005\n"
+	    "$Revision: 2.79 $ (C) Fred Hucht 1995-2005\n"
 	    "\n"
 	    "%s reads three column data from standard input or from command specified with '-c'.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension L\n"
@@ -1058,12 +1061,16 @@ inline double PowLogLog(double x, double y) {
 }
 
 void Calculate(NumParams *p) {
-  int i, j;
+  int i, j, normalSetActive = 0;
   
   p->XX.min = p->XX.minp = p->XX.minOp = p->XX.minBp = DBL_MAX;
   p->XX.max = p->XX.maxOp = -DBL_MAX;
   
   p->YY = p->XX;
+  
+  for (i = 0; i < p->S; i++) if ( p->Set[i].L != 0 ) {
+    normalSetActive |= p->Set[i].active;
+  }
   
   for (i = 0; i < p->S; i++) if (p->Set[i].active) {
     Set_t *s  = &p->Set[i];
@@ -1074,6 +1081,11 @@ void Calculate(NumParams *p) {
 	Data_t *d  = &s->Data[j];
 	d->x = ds->T;
 	d->y = ds->M * Pow(ds->T, p->M);
+
+	if (!normalSetActive && finite(d->x) && finite(d->y)) {
+	  SetMinMax(&p->XX, d->x, d->y);
+	  SetMinMax(&p->YY, d->y, d->x);
+	}
       }
     } else { /* normal data set */
       double ll, l, Lx, Ly, Lxs, Lys;
@@ -1667,6 +1679,15 @@ void AutoScale(NumParams *p) {
     break;
   }
   
+  if ( p->OXmin == p->OXmax ) {
+    p->OXmin -= 0.01;
+    p->OXmax += 0.01;
+  }
+  if ( p->OYmin == p->OYmax ) {
+    p->OYmin -= 0.01;
+    p->OYmax += 0.01;
+  }
+
   dx = p->OXmax - p->OXmin;
   dy = p->OYmax - p->OYmin;
   p->OXmin -= 0.05 * dx;
@@ -2098,16 +2119,20 @@ void ProcessQueue(NumParams *p, GraphParams *g) {
 	break;
       }
     } else {
-      int i;
+      int i, flag = 0, ii = -1;
       Mmx = mx - g->XPos;
       Mmy = my - g->YPos;
-      for (i = 0; i < p->S; i++)
+      for (i = 0; i < p->S; i++) {
 	if (Mmx >= p->Set[i].cpos.x0 && Mmx <= p->Set[i].cpos.x1 &&
 	    Mmy >= p->Set[i].cpos.y0 && Mmy <= p->Set[i].cpos.y1) {
-	  p->Set[i].active ^= 1;
+	  p->Set[ii = i].active ^= 1;
 	  todo = ReCa;
-	  break;
 	}
+	flag |= p->Set[i].active;
+      }
+      if ( ii >= 0 && !flag ) p->Set[ii].active ^= 1;
+      if ( ii >= 0 ) break;
+      
       for (i = 1; i < ALast; i++)
 	if (Mmx >= g->cpos[i].x0 && Mmx <= g->cpos[i].x1 &&
 	    Mmy >= g->cpos[i].y0 && Mmy <= g->cpos[i].y1) {
@@ -2222,13 +2247,21 @@ void ProcessQueue(NumParams *p, GraphParams *g) {
     if (val >= '0' && val <= '9') {
       Int16 val2;
       if (KEYBD == qread(&val2) && val2 >= '0' && val2 <= '9') {
+	int i, flag = 0;
 	val = 10 * (val - '0') + (val2 - '0');
 	if (val == 99) {
-	  int i;
-	  for (i = 0; i < p->S; i++) p->Set[i].active ^= 1;
+	  for (i = 0; i < p->S; i++) {
+	    p->Set[i].active ^= 1;
+	    flag |= p->Set[i].active;
+	  }
+	  if ( !flag ) p->Set[0].active ^= 1;
 	  todo = ReCa;
 	} else if (val < p->S) {
 	  p->Set[val].active ^= 1;
+	  for ( i = 0; i < p->S; i++ ) {
+	    flag |= p->Set[i].active;
+	  }
+	  if ( !flag ) p->Set[val].active ^= 1;
 	  todo = ReCa;
 	}
       }
