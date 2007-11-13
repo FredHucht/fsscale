@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995-2007
  *
- * $Id: fsscale.c,v 2.79 2007-11-06 15:59:07+01 fred Exp fred $
+ * $Id: fsscale.c,v 2.80 2007-11-12 15:10:10+01 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.80  2007-11-12 15:10:10+01  fred
+ * Fixed hangup when no L!=0 set active; fixed hangup when plotrange is empty
+ *
  * Revision 2.79  2007-11-06 15:59:07+01  fred
  * Check for L0,Xf,Yf == 0
  *
@@ -250,7 +253,7 @@
  */
 /*#pragma OPTIONS inline+Pow*/
 
-char   *RCSId = "$Id: fsscale.c,v 2.79 2007-11-06 15:59:07+01 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.80 2007-11-12 15:10:10+01 fred Exp fred $";
 
 /* Note: AIX: Ignore warnings "No function prototype given for 'finite'"
  * From math.h:
@@ -542,6 +545,13 @@ void WriteParams(const NumParams *p, const GraphParams *g) {
     n++;
   }
     
+  if (g->AutoScale == 0) {
+    fprintf(tn, "plotrange = %g %g %g %g\n",
+	    p->OXmin, p->OXmax,
+	    p->OYmin, p->OYmax);
+    n++;
+  }
+    
   {
     int inactive = 0;
     for (a = 0; a < p->S; a++) if (!p->Set[a].active) inactive = 1;
@@ -613,6 +623,12 @@ void ReadParams(NumParams *p, GraphParams *g) {
 	p->L0_only_in_log = atoi(val);
       } else if (strcmp(name, "inactive") == 0) {
 	strncpy(p->Inactives, val, sizeof(p->Inactives));
+      } else if (strcmp(name, "plotrange") == 0) {
+	p->OXmin = atof(strtok(val , " "));
+	p->OXmax = atof(strtok(NULL, " "));
+	p->OYmin = atof(strtok(NULL, " "));
+	p->OYmax = atof(strtok(NULL, " "));
+	g->AutoScale = 0;
       }
       for (a = 1; a < sizeof(Defaults) / sizeof(Defaults[0]); a++) {
 	if (strcmp(name, Defaults[a].name) == 0) {
@@ -640,7 +656,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.79 $ (C) Fred Hucht 1995-2005\n"
+	    "$Revision: 2.80 $ (C) Fred Hucht 1995-2005\n"
 	    "\n"
 	    "%s reads three column data from standard input or from command specified with '-c'.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension L\n"
