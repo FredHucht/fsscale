@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995-2007
  *
- * $Id: fsscale.c,v 2.80 2007-11-12 15:10:10+01 fred Exp fred $
+ * $Id: fsscale.c,v 2.81 2007-11-13 16:18:26+01 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.81  2007-11-13 16:18:26+01  fred
+ * Added plotrange = ... to Params file
+ *
  * Revision 2.80  2007-11-12 15:10:10+01  fred
  * Fixed hangup when no L!=0 set active; fixed hangup when plotrange is empty
  *
@@ -253,7 +256,7 @@
  */
 /*#pragma OPTIONS inline+Pow*/
 
-char   *RCSId = "$Id: fsscale.c,v 2.80 2007-11-12 15:10:10+01 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.81 2007-11-13 16:18:26+01 fred Exp fred $";
 
 /* Note: AIX: Ignore warnings "No function prototype given for 'finite'"
  * From math.h:
@@ -656,7 +659,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.80 $ (C) Fred Hucht 1995-2005\n"
+	    "$Revision: 2.81 $ (C) Fred Hucht 1995-2005\n"
 	    "\n"
 	    "%s reads three column data from standard input or from command specified with '-c'.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension L\n"
@@ -1011,11 +1014,15 @@ void ReadData(NumParams *p) {
   
   if (p->Inactives[0] != '\0') {
     char inactives[1024], *str;
+    int i, flag = 0;
     strncpy(inactives, p->Inactives, sizeof(inactives));
     for (str = strtok(inactives, " "); str; str = strtok(NULL, " ")) {
       int a = atoi(str);
       if (a >= 0 && a < p->S) p->Set[a].active = 0;
     }
+    /* Check if all sets are inactive */
+    for (i = 0; i < p->S; i++) flag |= p->Set[i].active;
+    if ( !flag ) for (i = 0; i < p->S; i++) p->Set[i].active = 1;
   }
 }
 
