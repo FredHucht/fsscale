@@ -2,9 +2,12 @@
  * 
  * Finite Size scaling (C) Fred Hucht 1995-2007
  *
- * $Id: fsscale.c,v 2.81 2007-11-13 16:18:26+01 fred Exp fred $
+ * $Id: fsscale.c,v 2.82 2007-11-13 17:31:33+01 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.82  2007-11-13 17:31:33+01  fred
+ * *** empty log message ***
+ *
  * Revision 2.81  2007-11-13 16:18:26+01  fred
  * Added plotrange = ... to Params file
  *
@@ -256,7 +259,7 @@
  */
 /*#pragma OPTIONS inline+Pow*/
 
-char   *RCSId = "$Id: fsscale.c,v 2.81 2007-11-13 16:18:26+01 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.82 2007-11-13 17:31:33+01 fred Exp fred $";
 
 /* Note: AIX: Ignore warnings "No function prototype given for 'finite'"
  * From math.h:
@@ -659,7 +662,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.81 $ (C) Fred Hucht 1995-2005\n"
+	    "$Revision: 2.82 $ (C) Fred Hucht 1995-2005\n"
 	    "\n"
 	    "%s reads three column data from standard input or from command specified with '-c'.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension L\n"
@@ -1301,11 +1304,15 @@ int bgnenddraw(int bgn) {
   if(bgn == active) {
     return 0;
   } else if (bgn) {
-    linewidth(Gp->Lines);
-    Gp->Lines ? bgnline() : bgnpoint();
+    switch (Gp->Lines) {
+    case 0: case 1: pntsize(3*Gp->Lines+1); bgnpoint(); break;
+    case 2: case 3: linewidth(Gp->Lines-1); bgnline(); break;
+    }
   } else {
-    Gp->Lines ? endline() : endpoint();
-    linewidth(1);
+    switch (Gp->Lines) {
+    case 0: case 1: endpoint(); pntsize(1); break;
+    case 2: case 3: endline(); linewidth(1); break;
+    }
   }
   active ^= 1;
   return 1;
@@ -2326,7 +2333,7 @@ void ProcessQueue(NumParams *p, GraphParams *g) {
     case '#': g->ShowNuBeta ^= 1;            todo = ReMa; break;
     case '/': p->ReduceT = 1 - p->ReduceT;   todo = ReCa; break;
     case 'r': ReverseVideo(g);               todo = ReWr; break;
-    case 'l': g->Lines = (g->Lines + 1) % 3; todo = ReWr; break;
+    case 'l': g->Lines = (g->Lines + 1) % 4; todo = ReWr; break;
     case 'g': g->Grid  = (g->Grid  + 1) % 3; todo = ReWr; break;
     case 'v': g->ShowVar ^= 1;               todo = ReVa; break;
     case 'V': p->VarType = (p->VarType + 1) % 4;
@@ -2684,7 +2691,7 @@ void write_dat(void) {
 void write_gnuplot(void) {
   FILE *gpfile;
   int i, j, first;
-  const char *styles[] = { "points", "lines", "linespoints" };
+  const char *styles[] = { "dots", "points", "lines", "linespoints" };
   char xlab[LABLEN], ylab[LABLEN];
   
   if ((gpfile = fopen(Gp->GPName, "w")) == NULL) {
@@ -2762,15 +2769,15 @@ int main(int argc, char *argv[]) {
   
   GraphParams G = {
     {GRAY, GREEN, YELLOW, CYAN, MAGENTA, RED, WHITE},
-    WHITE,
-    BLACK,
-    180,
-    1,
-    1,
-    0,
-    1,
-    400, 400,
-    "FSScale",
+    WHITE,    /* FgColor */
+    BLACK,    /* BgColor */
+    180,      /* GrayVal */
+    1,        /* AutoScale */
+    2,        /* Lines */
+    0,        /* Grid */
+    1,        /* RemoveFiles */
+    400, 400, /* XSize, YSize */
+    "FSScale",/* Title */
     "-*-Times-Medium-R-Normal--17-*-*-*-*-*-*-*",
     {"L", "T", "M", "D"},
     {0.02, 0.01},
