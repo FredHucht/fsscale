@@ -1,10 +1,16 @@
 /* -*- mode: c;  c-basic-offset: 2 -*-
  * 
- * Finite Size scaling (C) Fred Hucht 1995-2007
+ * Finite Size scaling (C) Fred Hucht 1995-2025
  *
- * $Id: fsscale.c,v 2.83 2008-09-26 11:10:17+02 fred Exp fred $
+ * $Id: fsscale.c,v 2.84 2009-11-23 08:23:12+01 fred Exp fred $
  *
  * $Log: fsscale.c,v $
+ * Revision 2.85  2025-08-06 17:00:00+02  fred (log by hand)
+ * added ALu aka. alog(m)^Lu, finite() -> isfinite()
+ *
+ * Revision 2.84  2009-11-23 08:23:12+01  fred
+ * Fixed NuBeta handling in ChangeActive()
+ *
  * Revision 2.83  2008-09-26 11:10:17+02  fred
  * Added pntsize()
  *
@@ -262,7 +268,7 @@
  */
 /*#pragma OPTIONS inline+Pow*/
 
-char   *RCSId = "$Id: fsscale.c,v 2.83 2008-09-26 11:10:17+02 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.84 2009-11-23 08:23:12+01 fred Exp fred $";
 
 /* Note: AIX: Ignore warnings "No function prototype given for 'finite'"
  * From math.h:
@@ -284,6 +290,10 @@ char   *RCSId = "$Id: fsscale.c,v 2.83 2008-09-26 11:10:17+02 fred Exp fred $";
 #include <unistd.h>
 #include <time.h>
 #include <errno.h>
+
+#ifndef finite
+# define finite isfinite
+#endif
 
 #ifndef MAX
 # define MAX(a, b) ((a) > (b) ? (a) : (b))
@@ -364,54 +374,24 @@ typedef struct NumParams_ {
   double VarFactor;
   int    L0_only_in_log;
   double Vardummy,
-    /**/d, L0, Xf, Tc, Z, Lz, Lc, X, DX, Lx, LLx, Lxsf, Zs, Xs, DXs, Lxs, Yf, Mc, U, DU, Y, DY, Ly, LLy, M, Lm, Lysf, Us, Ys, DYs, Lys, Ms, Lms;
+    /**/d, L0, Xf, Tc, Z, Lz, Lc, X, DX, Lx, LLx, Lxsf, Zs, Xs, DXs, Lxs, Yf, Mc, U, DU, Lu, Y, DY, Ly, LLy, M, Lm, Lysf, Us, Ys, DYs, Lys, Ms, Lms;
   double ReduceT; /* Must be behind Vars for Read/WriteParams */
 } NumParams;
 enum ActiveNames {
 #define ActiveDefaults /* see start of main() */ \
- {AOff,Ad,AL0,AXf,ATc,AZ,ALz,ALc,AX,    ALx,ALLx,ALxsf,AZs,AXs,     ALxs,AYf,AMc,AU,    AY,    ALy,ALLy,AM,ALm,ALysf,AUs,AYs,     ALys,AMs,ALms}
-  AOff,Ad,AL0,AXf,ATc,AZ,ALz,ALc,AX,ADX,ALx,ALLx,ALxsf,AZs,AXs,ADXs,ALxs,AYf,AMc,AU,ADU,AY,ADY,ALy,ALLy,AM,ALm,ALysf,AUs,AYs,ADYs,ALys,AMs,ALms,
+ {AOff,Ad,AL0,AXf,ATc,AZ,ALz,ALc,AX,    ALx,ALLx,ALxsf,AZs,AXs,     ALxs,AYf,AMc,AU,    ALu,AY,    ALy,ALLy,AM,ALm,ALysf,AUs,AYs,     ALys,AMs,ALms}
+  AOff,Ad,AL0,AXf,ATc,AZ,ALz,ALc,AX,ADX,ALx,ALLx,ALxsf,AZs,AXs,ADXs,ALxs,AYf,AMc,AU,ADU,ALu,AY,ADY,ALy,ALLy,AM,ALm,ALysf,AUs,AYs,ADYs,ALys,AMs,ALms,
   ALast
 };
 
 struct Defaults_ {
   char *name;
   double val;
-} Defaults[] = {{"",    0},
-		{"d", 0.1},
-		{"L0",  1},
-		{"Xf",  1},
-		{"Tc",  0},
-		{"Z",   1},
-		{"Lz",  0},
-		{"Lc",  0},
-		{"X",   0},
-		{"DX",  0},
-		{"Lx",  0},
-		{"LLx", 0},
-		{"Lxsf",0},
-		{"Zs",  0},
-		{"Xs",  0},
-		{"DXs", 0},
-		{"Lxs", 0},
-		{"Yf",  1},
-		{"Mc",  0},
-		{"U",   1},
-		{"DU",  0},
-		{"Y",   0},
-		{"DY",  0},
-		{"Ly",  0},
-		{"LLy", 0},
-		{"M",   0},
-		{"Lm",  0},
-		{"Lysf",0},
-		{"Us",  0},
-		{"Ys",  0},
-		{"DYs", 0},
-		{"Lys", 0},
-		{"Ms",  0},
-		{"Lms", 0},
-		{"ReduceT", 0}
+} Defaults[] = {{"",    0}, {"d", 0.1}, {"L0",  1}, {"Xf",  1}, {"Tc",  0}, {"Z",   1}, {"Lz",  0}, {"Lc",  0},
+		{"X",   0}, {"DX",  0}, {"Lx",  0}, {"LLx", 0}, {"Lxsf",0}, {"Zs",  0}, {"Xs",  0}, {"DXs", 0},
+		{"Lxs", 0}, {"Yf",  1}, {"Mc",  0}, {"U",   1}, {"DU",  0}, {"Lu",  0}, {"Y",   0}, {"DY",  0},
+		{"Ly",  0}, {"LLy", 0}, {"M",   0}, {"Lm",  0}, {"Lysf",0}, {"Us",  0}, {"Ys",  0}, {"DYs", 0},
+		{"Lys", 0}, {"Ms",  0}, {"Lms", 0}, {"ReduceT", 0}
 };
 
 enum RecalcNames {
@@ -665,7 +645,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.83 $ (C) Fred Hucht 1995-2005\n"
+	    "$Revision: 2.84 $ (C) Fred Hucht 1995-2005\n"
 	    "\n"
 	    "%s reads three column data from standard input or from command specified with '-c'.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension L\n"
@@ -718,7 +698,7 @@ void Usage(int verbose) {
 	    "  Keys pad1/pad7:     Change activated variable by  10 * d\n"
 	    "  Keys pad2/pad8:     Change activated variable by       d\n"
 	    "  Keys pad3/pad9:     Change activated variable by 0.1 * d\n"
-	    "  Keys pad5:          Toggle automatic determination of activated variable\n"
+	    "  Keys pad5|'*':      Toggle automatic determination of activated variable\n"
 	    "                      in steps of d (...)\n"
 	    "\n"
 	    "  Arrow left|right:   Change exponent x:       x -=|+= d\n"
@@ -1135,7 +1115,7 @@ void Calculate(NumParams *p) {
 	
 	d->x = Lx  * Pow(t, p->Z)  * PowLog(t, p->Lz)
 	  +    Lxs * Pow(t, p->Zs);
-	d->y = Ly  * Pow(t, p->M)  * PowLog(t, p->Lm)  * Pow(m, p->U + p->DU * s->D)
+	d->y = Ly  * Pow(t, p->M)  * PowLog(t, p->Lm)  * Pow(m, p->U + p->DU * s->D) * PowLog(m, p->Lu)
 	  +    Lys * Pow(t, p->Ms) * PowLog(t, p->Lms) * Pow(m, p->Us);
 	
 	if (finite(d->x) && finite(d->y)) {
@@ -1595,6 +1575,8 @@ void DrawMain(const NumParams *p, GraphParams *g) {
   
   /* (M - Mc)^(U + DU * D) */
   WriteTerm(p, g, NULL,  AMc, 1, AU,  ADU,  xy);
+  /* log(M - Mc)^Lu */
+  WriteTerm(p, g, "alog", AMc, 0, ALu, AOff, xy);
   /* (L - Lc)^(Y + DY * D) */
   WriteTerm(p, g, NULL,  ALc, 0, AY,  ADY,  xy);
   /* log(L - Lc)^Ly */
@@ -2412,6 +2394,19 @@ void ProcessQueue(NumParams *p, GraphParams *g) {
 	break;
       }
       todo = ReCa; break;
+    case '*':
+      if (p->AutoExp == g->Active) {
+	p->AutoExp = AOff;
+	todo    = ReCa;
+	rewrite = 1;
+      } else switch (g->Active) {
+      case Ad:
+	break;
+      default:
+	p->AutoExp = g->Active;
+	todo = ReCa;
+      }
+      break;
     case 'q':
     case '\033':
 #ifdef OLD_DATFILES
