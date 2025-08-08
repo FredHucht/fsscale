@@ -9,6 +9,7 @@ fsscale is distributed in terms of the GNU GENERAL PUBLIC LICENSE.
 <h2>Examples</h2>
 
 ![SpecificHeat-MF](https://github.com/user-attachments/assets/16c6ee5f-348d-42a9-bfc4-913df4ea0cec)
+
 Example: Specific heat of the two-dimensional Ising model with long range interactions <br>
 <a href="https://doi.org/10.1103/PhysRevE.69.036104">D. Grüneberg & A. Hucht, Phys Rev E 69, 036104 (2004)</a>, https://arxiv.org/abs/cond-mat/0310252.
 
