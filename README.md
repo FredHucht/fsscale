@@ -1,25 +1,17 @@
-<h1>fsscale: A program for doing Finite-Size Scaling</h1>
+<h1>fsscale: a program for doing finite-size scaling</h1>
 
-<h4>
-<font size="4">&copy;</font>opyright 1998-today by
-<a href="http://www.thp.uni-due.de/%7Efred/">Fred Hucht (fred(AT)thp.uni-due.de)</a></h4>
+<h4>&copy;opyright 1995-today by Fred Hucht (fred(AT)thp.uni-due.de)</h4>
 
-fsscale is written in C and runs under most Unixes using the graphics library <a href="https://github.com/FredHucht/Ygl/">Ygl</a> or GL. 
+fsscale is written in C and runs under most Unixes using the graphics library <a href="https://github.com/FredHucht/Ygl">Ygl</a> or SGI's GL. 
 
-fsscale is distributed in terms of the GNU LIBRARY GENERAL PUBLIC LICENSE. 
-
-<h2>Features</h2>
-Note the very useful option "-p &lt;filename&gt;" and the shortcuts "W"
-and "Q". Using this you can save the state of fsscale to a file and
-read it back in.<br>
+fsscale is distributed in terms of the GNU GENERAL PUBLIC LICENSE. 
 
 <h2>Examples</h2>
 
-...<br>
-
-<img src="SpecificHeat-MF.gif" title="" alt="Specific Heat" style="width: 410px; height: 431px;"><br>
+![SpecificHeat-MF](https://github.com/user-attachments/assets/16c6ee5f-348d-42a9-bfc4-913df4ea0cec)
 Example: Specific heat of the two-dimensional Ising model with long range interactions <br>
-(<a href="http://www.thp.uni-due.de/Paper/fred/200301-PRE.pdf">D. Gr&uuml;neberg &amp; A. Hucht, Phys Rev E 69, 036104 (2004)</a>). <br>
+<a href="https://doi.org/10.1103/PhysRevE.69.036104">D. Grüneberg & A. Hucht, Phys Rev E 69, 036104 (2004)</a>, https://arxiv.org/abs/cond-mat/0310252.
+
 A typical varsfile looks like that:<br>
 <pre>
 title = Specific Heat
@@ -156,4 +148,20 @@ Possible actions are:
 <a href="http://www.sgi.com/">Silicon Graphics, Inc.</a>
 </p>
 
-</body></html>
+Finite Size scaling (C) Fred Hucht 1995-2025
+
+fsscale is a tool for finite size scaling.
+
+<h2>Installation</h2>
+
+fsscale needs the Ygl graphics library from https://github.com/FredHucht/Ygl
+
+After installation of Ygl do something like
+
+Linux: cc -O fsscale.c -o fsscale -L/usr/X11R6/lib -lYgl -lX11 -lXext -lm
+
+macOS: cc -O -I /opt/local/include -o fsscale fsscale.c -L /opt/local/lib -lYgl
+
+AIX:   cc -O fsscale.c -o fsscale -lYgl -lm
+
+Online help is available via "fsscale -h".
