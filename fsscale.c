@@ -1,274 +1,8 @@
-/* -*- mode: c;  c-basic-offset: 2 -*-
- * 
- * Finite Size scaling (C) Fred Hucht 1995-2025
- *
- * $Id: fsscale.c,v 2.84 2009-11-23 08:23:12+01 fred Exp fred $
- *
- * $Log: fsscale.c,v $
- * Revision 2.85  2025-08-06 17:00:00+02  fred (log by hand)
- * added ALu aka. alog(m)^Lu, finite() -> isfinite()
- *
- * Revision 2.84  2009-11-23 08:23:12+01  fred
- * Fixed NuBeta handling in ChangeActive()
- *
- * Revision 2.83  2008-09-26 11:10:17+02  fred
- * Added pntsize()
- *
- * Revision 2.82  2007-11-13 17:31:33+01  fred
- * *** empty log message ***
- *
- * Revision 2.81  2007-11-13 16:18:26+01  fred
- * Added plotrange = ... to Params file
- *
- * Revision 2.80  2007-11-12 15:10:10+01  fred
- * Fixed hangup when no L!=0 set active; fixed hangup when plotrange is empty
- *
- * Revision 2.79  2007-11-06 15:59:07+01  fred
- * Check for L0,Xf,Yf == 0
- *
- * Revision 2.78  2007-10-31 12:58:13+01  fred
- * *** empty log message ***
- *
- * Revision 2.77  2007-06-04 13:49:12+02  fred
- * *** empty log message ***
- *
- * Revision 2.76  2007-06-01 12:24:33+02  fred
- * LABLEN
- *
- * Revision 2.75  2007-05-23 17:02:26+02  fred
- * Removed reference to <malloc.h>
- *
- * Revision 2.74  2005-11-24 19:14:16+01  fred
- * Added -4 support to params files, reset vars on 'Q'
- *
- * Revision 2.73  2005-11-22 18:25:42+01  fred
- * *** empty log message ***
- *
- * Revision 2.72  2005-11-22 18:23:06+01  fred
- * Added Ms, Lms; cleanup in Calculate()
- *
- * Revision 2.71  2005-11-17 13:42:53+01  fred
- * Ignore scaling function (L==0) in autoscale
- *
- * Revision 2.70  2005-11-16 11:38:39+01  fred
- * Fixed problem with virtual timer and popen() at least under MacOSX
- *
- * Revision 2.69  2004-07-01 17:12:14+02  fred
- * Added DXs, DYs
- *
- * Revision 2.68  2004-05-18 12:20:28+02  fred
- * Added Write/Read of active (shown) data sets
- *
- * Revision 2.67  2003-03-14 23:00:42+01  fred
- * Added AZs, AUs
- *
- * Revision 2.66  2003/02/25 10:00:54  fred
- * Fixed bug in -N processing (occured under Linux)
- *
- * Revision 2.65  2002-12-17 15:47:42+01  fred
- * New option -c <cmd> (saved in params file, very helpful!), new key '='
- * sets L0 only in logs, etc.
- *
- * Revision 2.64  2002-12-04 11:26:13+01  fred
- * Fixed 's'
- *
- * Revision 2.63  2002-11-29 14:31:01+01  fred
- * Many changes: Lys, Minor grid, text resorted, ...
- *
- * Revision 2.62  2002-08-15 16:08:38+02  fred
- * Also save ReduceT
- *
- * Revision 2.61  2002-08-15 15:31:15+02  fred
- * Added -p params file support
- *
- * Revision 2.60  2002-08-15 14:12:54+02  fred
- * Added wheel mouse
- *
- * Revision 2.59  2002-08-15 11:49:07+02  fred
- * Added display of scaling function (loadable with L=0) and metric
- * factors
- *
- * Revision 2.58  2002-07-09 14:01:55+02  fred
- * Added L0 for log corrections, fixed finite() prototype under AIX
- *
- * Revision 2.57  2002/06/05 14:34:16  fred
- * *** empty log message ***
- *
- * Revision 2.56  2002-06-05 11:11:35+02  fred
- * Added new log corrections, added reduced temperature '/', removed "*"
- * in labels
- *
- * Revision 2.55  2002/06/04 10:25:32  fred
- * log() -> ALog()
- *
- * Revision 2.54  2001-07-11 16:22:45+02  fred
- * Added Title to file names
- *
- * Revision 2.53  2001-07-11 11:57:11+02  fred
- * Added write_dat(), now 'p' also writes a single data file with sets
- * seperated by double blank lines (loadable by gnuplot and xmgr*).
- * Removed old method write_dats() which wrote several files.
- *
- * Revision 2.52  2001/03/07 13:33:29  fred
- * Added 'r'everse video, reset is now 'R'
- *
- * Revision 2.51  2001-02-21 10:02:14+01  fred
- * *** empty log message ***
- *
- * Revision 2.50  2001-02-21 10:01:31+01  fred
- * Added description of key 'V'
- *
- * Revision 2.49  2001-02-19 16:10:17+01  fred
- * Added oldD
- *
- * Revision 2.48  2001-02-19 10:56:45+01  fred
- * draw mean and variance dotted
- *
- * Revision 2.47  2001-02-19 10:44:50+01  fred
- * Grid now dotted
- *
- * Revision 2.46  2001-02-15 10:37:57+01  fred
- * buffer overflow in ReadData
- *
- * Revision 2.45  2001-02-14 10:51:58+01  fred
- * *** empty log message ***
- *
- * Revision 2.44  2000-11-03 10:14:29+01  fred
- * *** empty log message ***
- *
- * Revision 2.43  2000-11-03 09:58:41+01  fred
- * ShowNuBeta also in xmgr/gnuplot output
- *
- * Revision 2.42  2000-05-18 19:05:08+02  fred
- * Added key '#'
- *
- * Revision 2.41  2000/01/11 15:47:53  fred
- * Added finite() to checked_v2d
- *
- * Revision 2.40  2000-01-04 13:38:20+01  fred
- * Added variance prefactor ('f'/'F')
- *
- * Revision 2.39  1998-06-04 15:29:06+02  fred
- * Mouse control in formula/datasets, own pow(), loglog(), ...
- *
- * Revision 2.38  1998-03-02 13:19:55+01  fred
- * Added mouse support for formula etc.
- * Added SetMinMax(), WriteTerm(), ChangeActive()
- * Renamed vars Exp... -> ...
- *
- * Revision 2.37  1998-03-02 12:10:10+01  fred
- * Re-removed dashed grid (too slow...)
- *
- * Revision 2.36  1998-02-28 01:06:51+01  fred
- * Removed all global variables for performance reasons
- *
- * Revision 2.35  1998-02-27 21:28:51+01  fred
- * Removed LVar, LFit stuff
- *
- * Revision 2.34  1998/02/27 17:48:16  fred
- * Reordered todo stuff
- *
- * Revision 2.33  1998-02-26 15:31:43+01  fred
- * Cosmetic
- *
- * Revision 2.32  1998-02-26 15:22:45+01  fred
- * Added fit stuff
- *
- * Revision 2.31  1998-02-12 15:17:35+01  fred
- * Added finite()
- *
- * Revision 2.30  1998-02-11 16:47:39+01  fred
- * Added ExpLm, ExpLz, fixed log(L) -> log(L-Lc)
- *
- * Revision 2.29  1998-02-09 15:58:48+01  fred
- * Y = ... * L^y -> Y = ... * (L - Lc)^Y
- *
- * Revision 2.28  1998-02-09 15:40:21+01  fred
- * ExpB -> ExpD, DBL_MAX, some minors
- *
- * Revision 2.26  1998/02/03 12:31:02  fred
- * xmgr output now has world coordinates (no autoscale)
- *
- * Revision 2.25  1998/02/02 13:35:46  fred
- * data now in gnuplot file, rewrote {gnuplot|xmgr}_label(), added
- * variance of previous parameters (blue line)
- *
- * Revision 2.24  1997-06-16 18:20:39+02  fred
- * Fixed -A option
- *
- * Revision 2.23  1997-04-29 16:06:35+02  fred
- * log(L) -> log(Names[0])
- *
- * Revision 2.22  1997/03/12 18:20:20  fred
- * Added xmgr stuff
- *
- * Revision 2.21  1997-03-12 16:54:16+01  michael
- * kleinen bug beim dateinamen erzeugen gefixt
- *
- * Revision 2.20  1997/03/12 15:34:47  michael
- * namen für gnuplot outputfiles überarbeitet.
- *
- * Revision 2.19  1997/03/12 15:08:45  michael
- * added 'P' key for static datafiles for gnuplot output
- *
- * Revision 2.18  1996/12/05 12:15:01  michael
- * fixed another bug in gnuplot()
- *
- * Revision 2.17  1996/11/14 15:24:42  michael
- * fixed a bug in gnuplot() (int first etc...)
- *
- * Revision 2.16  1996/11/11 16:50:55  fred
- * Failed to read lines with more columns than expected.
- *
- * Revision 2.15  1996-11-11 17:47:15+01  fred
- * Added log corrections, ExpX, ExpY now may lineary depend on
- * (undocumented) 4th column (use option -4), useful for gap exponents...
- *
- * Revision 2.14  1996-11-07 14:07:13+01  fred
- * lmlc etal. und Active...
- *
- * Revision 2.13  1996-11-06 19:35:20+01  fred
- * Added new input method using Keypad keys.
- *
- * Revision 2.12  1996-11-05 18:52:35+01  fred
- * 'r' now resets to values given on commandline
- *
- * Revision 2.11  1996-11-05 18:44:13+01  fred
- * Autoscale now includes variance function
- *
- * Revision 2.10  1996-10-24 10:57:17+02  fred
- * Removed Key i
- *
- * Revision 2.9  1996-10-23 17:14:04+02  michael
- * fixed bug: weisser Punkt is now Punkt in FgColor.
- * setting of replot is more intelligent.
- *
- * Revision 2.8  1996/10/23 14:13:56  fred
- * Added weisser Punkt.
- *
- * Revision 2.7  1996-10-23 15:39:55+02  michael
- * Added help line for key 'p'
- *
- * Revision 2.6  1996/10/23 13:33:38  michael
- * Added gnuplot output and isatty(fileno(stdin)) warning
- *
- * Revision 2.5  1996/09/12 10:30:33  fred
- * Changed ZCHECK to INTCHECK, fixed bug Xmax, Ymax always >= 0
- *
- * Revision 2.4  1996/09/11 20:40:18  fred
- * Added ExpU
- *
- * Revision 2.3  1996/07/31 18:29:35  fred
- * Added ExpZ, Lc
- *
- * Revision 2.2  1996-07-30 11:20:35+02  fred
- * Added Mc
- *
- *
- */
+/* -*- mode: c;  c-basic-offset: 2 -*- */
+
 /*#pragma OPTIONS inline+Pow*/
 
-char   *RCSId = "$Id: fsscale.c,v 2.84 2009-11-23 08:23:12+01 fred Exp fred $";
+char   *RCSId = "$Id: fsscale.c,v 2.85 2025/08/06 19:39:42 fred Exp $";
 
 /* Note: AIX: Ignore warnings "No function prototype given for 'finite'"
  * From math.h:
@@ -645,7 +379,7 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.84 $ (C) Fred Hucht 1995-2005\n"
+	    "$Revision: 2.85 $ (C) Fred Hucht 1995-2025\n"
 	    "\n"
 	    "%s reads three column data from standard input or from command specified with '-c'.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension L\n"
@@ -2841,3 +2575,273 @@ int main(int argc, char *argv[]) {
   if (P.Bewert) P.Error = Valuate(&P);
   while (1) ProcessQueue(&P, &G);
 }
+
+/* 
+ * Finite Size scaling (C) Fred Hucht 1995-2025
+ *
+ * $Id: fsscale.c,v 2.85 2025/08/06 19:39:42 fred Exp $
+ *
+ * $Log: fsscale.c,v $
+ * Revision 2.85  2025/08/06 19:39:42  fred
+ * Summary: ALu aka. alog(m)^Lu, finite() -> isfinite()
+ *
+ * Revision 2.85  2025-08-06 17:00:00+02  fred (log by hand)
+ * added ALu aka. alog(m)^Lu, finite() -> isfinite()
+ *
+ * Revision 2.84  2009-11-23 08:23:12+01  fred
+ * Fixed NuBeta handling in ChangeActive()
+ *
+ * Revision 2.83  2008-09-26 11:10:17+02  fred
+ * Added pntsize()
+ *
+ * Revision 2.82  2007-11-13 17:31:33+01  fred
+ * *** empty log message ***
+ *
+ * Revision 2.81  2007-11-13 16:18:26+01  fred
+ * Added plotrange = ... to Params file
+ *
+ * Revision 2.80  2007-11-12 15:10:10+01  fred
+ * Fixed hangup when no L!=0 set active; fixed hangup when plotrange is empty
+ *
+ * Revision 2.79  2007-11-06 15:59:07+01  fred
+ * Check for L0,Xf,Yf == 0
+ *
+ * Revision 2.78  2007-10-31 12:58:13+01  fred
+ * *** empty log message ***
+ *
+ * Revision 2.77  2007-06-04 13:49:12+02  fred
+ * *** empty log message ***
+ *
+ * Revision 2.76  2007-06-01 12:24:33+02  fred
+ * LABLEN
+ *
+ * Revision 2.75  2007-05-23 17:02:26+02  fred
+ * Removed reference to <malloc.h>
+ *
+ * Revision 2.74  2005-11-24 19:14:16+01  fred
+ * Added -4 support to params files, reset vars on 'Q'
+ *
+ * Revision 2.73  2005-11-22 18:25:42+01  fred
+ * *** empty log message ***
+ *
+ * Revision 2.72  2005-11-22 18:23:06+01  fred
+ * Added Ms, Lms; cleanup in Calculate()
+ *
+ * Revision 2.71  2005-11-17 13:42:53+01  fred
+ * Ignore scaling function (L==0) in autoscale
+ *
+ * Revision 2.70  2005-11-16 11:38:39+01  fred
+ * Fixed problem with virtual timer and popen() at least under MacOSX
+ *
+ * Revision 2.69  2004-07-01 17:12:14+02  fred
+ * Added DXs, DYs
+ *
+ * Revision 2.68  2004-05-18 12:20:28+02  fred
+ * Added Write/Read of active (shown) data sets
+ *
+ * Revision 2.67  2003-03-14 23:00:42+01  fred
+ * Added AZs, AUs
+ *
+ * Revision 2.66  2003/02/25 10:00:54  fred
+ * Fixed bug in -N processing (occured under Linux)
+ *
+ * Revision 2.65  2002-12-17 15:47:42+01  fred
+ * New option -c <cmd> (saved in params file, very helpful!), new key '='
+ * sets L0 only in logs, etc.
+ *
+ * Revision 2.64  2002-12-04 11:26:13+01  fred
+ * Fixed 's'
+ *
+ * Revision 2.63  2002-11-29 14:31:01+01  fred
+ * Many changes: Lys, Minor grid, text resorted, ...
+ *
+ * Revision 2.62  2002-08-15 16:08:38+02  fred
+ * Also save ReduceT
+ *
+ * Revision 2.61  2002-08-15 15:31:15+02  fred
+ * Added -p params file support
+ *
+ * Revision 2.60  2002-08-15 14:12:54+02  fred
+ * Added wheel mouse
+ *
+ * Revision 2.59  2002-08-15 11:49:07+02  fred
+ * Added display of scaling function (loadable with L=0) and metric
+ * factors
+ *
+ * Revision 2.58  2002-07-09 14:01:55+02  fred
+ * Added L0 for log corrections, fixed finite() prototype under AIX
+ *
+ * Revision 2.57  2002/06/05 14:34:16  fred
+ * *** empty log message ***
+ *
+ * Revision 2.56  2002-06-05 11:11:35+02  fred
+ * Added new log corrections, added reduced temperature '/', removed "*"
+ * in labels
+ *
+ * Revision 2.55  2002/06/04 10:25:32  fred
+ * log() -> ALog()
+ *
+ * Revision 2.54  2001-07-11 16:22:45+02  fred
+ * Added Title to file names
+ *
+ * Revision 2.53  2001-07-11 11:57:11+02  fred
+ * Added write_dat(), now 'p' also writes a single data file with sets
+ * seperated by double blank lines (loadable by gnuplot and xmgr*).
+ * Removed old method write_dats() which wrote several files.
+ *
+ * Revision 2.52  2001/03/07 13:33:29  fred
+ * Added 'r'everse video, reset is now 'R'
+ *
+ * Revision 2.51  2001-02-21 10:02:14+01  fred
+ * *** empty log message ***
+ *
+ * Revision 2.50  2001-02-21 10:01:31+01  fred
+ * Added description of key 'V'
+ *
+ * Revision 2.49  2001-02-19 16:10:17+01  fred
+ * Added oldD
+ *
+ * Revision 2.48  2001-02-19 10:56:45+01  fred
+ * draw mean and variance dotted
+ *
+ * Revision 2.47  2001-02-19 10:44:50+01  fred
+ * Grid now dotted
+ *
+ * Revision 2.46  2001-02-15 10:37:57+01  fred
+ * buffer overflow in ReadData
+ *
+ * Revision 2.45  2001-02-14 10:51:58+01  fred
+ * *** empty log message ***
+ *
+ * Revision 2.44  2000-11-03 10:14:29+01  fred
+ * *** empty log message ***
+ *
+ * Revision 2.43  2000-11-03 09:58:41+01  fred
+ * ShowNuBeta also in xmgr/gnuplot output
+ *
+ * Revision 2.42  2000-05-18 19:05:08+02  fred
+ * Added key '#'
+ *
+ * Revision 2.41  2000/01/11 15:47:53  fred
+ * Added finite() to checked_v2d
+ *
+ * Revision 2.40  2000-01-04 13:38:20+01  fred
+ * Added variance prefactor ('f'/'F')
+ *
+ * Revision 2.39  1998-06-04 15:29:06+02  fred
+ * Mouse control in formula/datasets, own pow(), loglog(), ...
+ *
+ * Revision 2.38  1998-03-02 13:19:55+01  fred
+ * Added mouse support for formula etc.
+ * Added SetMinMax(), WriteTerm(), ChangeActive()
+ * Renamed vars Exp... -> ...
+ *
+ * Revision 2.37  1998-03-02 12:10:10+01  fred
+ * Re-removed dashed grid (too slow...)
+ *
+ * Revision 2.36  1998-02-28 01:06:51+01  fred
+ * Removed all global variables for performance reasons
+ *
+ * Revision 2.35  1998-02-27 21:28:51+01  fred
+ * Removed LVar, LFit stuff
+ *
+ * Revision 2.34  1998/02/27 17:48:16  fred
+ * Reordered todo stuff
+ *
+ * Revision 2.33  1998-02-26 15:31:43+01  fred
+ * Cosmetic
+ *
+ * Revision 2.32  1998-02-26 15:22:45+01  fred
+ * Added fit stuff
+ *
+ * Revision 2.31  1998-02-12 15:17:35+01  fred
+ * Added finite()
+ *
+ * Revision 2.30  1998-02-11 16:47:39+01  fred
+ * Added ExpLm, ExpLz, fixed log(L) -> log(L-Lc)
+ *
+ * Revision 2.29  1998-02-09 15:58:48+01  fred
+ * Y = ... * L^y -> Y = ... * (L - Lc)^Y
+ *
+ * Revision 2.28  1998-02-09 15:40:21+01  fred
+ * ExpB -> ExpD, DBL_MAX, some minors
+ *
+ * Revision 2.26  1998/02/03 12:31:02  fred
+ * xmgr output now has world coordinates (no autoscale)
+ *
+ * Revision 2.25  1998/02/02 13:35:46  fred
+ * data now in gnuplot file, rewrote {gnuplot|xmgr}_label(), added
+ * variance of previous parameters (blue line)
+ *
+ * Revision 2.24  1997-06-16 18:20:39+02  fred
+ * Fixed -A option
+ *
+ * Revision 2.23  1997-04-29 16:06:35+02  fred
+ * log(L) -> log(Names[0])
+ *
+ * Revision 2.22  1997/03/12 18:20:20  fred
+ * Added xmgr stuff
+ *
+ * Revision 2.21  1997-03-12 16:54:16+01  michael
+ * fixed small bug in file name generation
+ *
+ * Revision 2.20  1997/03/12 15:34:47  michael
+ * names for gnuplot output files changed
+ *
+ * Revision 2.19  1997/03/12 15:08:45  michael
+ * added 'P' key for static datafiles for gnuplot output
+ *
+ * Revision 2.18  1996/12/05 12:15:01  michael
+ * fixed another bug in gnuplot()
+ *
+ * Revision 2.17  1996/11/14 15:24:42  michael
+ * fixed a bug in gnuplot() (int first etc...)
+ *
+ * Revision 2.16  1996/11/11 16:50:55  fred
+ * Failed to read lines with more columns than expected.
+ *
+ * Revision 2.15  1996-11-11 17:47:15+01  fred
+ * Added log corrections, ExpX, ExpY now may lineary depend on
+ * (undocumented) 4th column (use option -4), useful for gap exponents...
+ *
+ * Revision 2.14  1996-11-07 14:07:13+01  fred
+ * lmlc etal. and Active...
+ *
+ * Revision 2.13  1996-11-06 19:35:20+01  fred
+ * Added new input method using Keypad keys.
+ *
+ * Revision 2.12  1996-11-05 18:52:35+01  fred
+ * 'r' now resets to values given on commandline
+ *
+ * Revision 2.11  1996-11-05 18:44:13+01  fred
+ * Autoscale now includes variance function
+ *
+ * Revision 2.10  1996-10-24 10:57:17+02  fred
+ * Removed Key i
+ *
+ * Revision 2.9  1996-10-23 17:14:04+02  michael
+ * fixed bug: white point is now point in FgColor
+ * setting of replot is more intelligent.
+ *
+ * Revision 2.8  1996/10/23 14:13:56  fred
+ * Added white point
+ *
+ * Revision 2.7  1996-10-23 15:39:55+02  michael
+ * Added help line for key 'p'
+ *
+ * Revision 2.6  1996/10/23 13:33:38  michael
+ * Added gnuplot output and isatty(fileno(stdin)) warning
+ *
+ * Revision 2.5  1996/09/12 10:30:33  fred
+ * Changed ZCHECK to INTCHECK, fixed bug Xmax, Ymax always >= 0
+ *
+ * Revision 2.4  1996/09/11 20:40:18  fred
+ * Added ExpU
+ *
+ * Revision 2.3  1996/07/31 18:29:35  fred
+ * Added ExpZ, Lc
+ *
+ * Revision 2.2  1996-07-30 11:20:35+02  fred
+ * Added Mc
+ *
+ */
