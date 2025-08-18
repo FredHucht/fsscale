@@ -3,6 +3,7 @@
 /*#pragma OPTIONS inline+Pow*/
 
 char   *RCSId = "$Id: fsscale.c,v 2.85 2025/08/06 19:39:42 fred Exp $";
+#define VERSION "2.86"
 
 /* Note: AIX: Ignore warnings "No function prototype given for 'finite'"
  * From math.h:
@@ -379,7 +380,8 @@ void Usage(int verbose) {
   else
     fprintf(stderr,
 	    "\n"
-	    "$Revision: 2.85 $ (C) Fred Hucht 1995-2025\n"
+	    /*"$Revision: 2.85 $ (C) Fred Hucht 1995-2025\n"*/
+	    "Version " VERSION " (C) Fred Hucht 1995-2025\n"
 	    "\n"
 	    "%s reads three column data from standard input or from command specified with '-c'.\n"
 	    "  1. Column:         scaling parameter, normally linear dimension L\n"
@@ -606,7 +608,7 @@ void GraphInit(GraphParams *g) {
     UPARROWKEY,   DOWNARROWKEY,
     LEFTARROWKEY, RIGHTARROWKEY,
     PAGEUPKEY,    PAGEDOWNKEY,
-    HOMEKEY, ENDKEY, INSERTKEY,    
+    HOMEKEY, ENDKEY, DELKEY, /* INSERTKEY not present on modern keyboards, use DELKEY */
     LEFTSHIFTKEY, RIGHTSHIFTKEY,
     LEFTALTKEY,   RIGHTALTKEY,
     LEFTMOUSE,    MIDDLEMOUSE,    RIGHTMOUSE,
@@ -1148,69 +1150,69 @@ void WriteTerm(const NumParams *p, GraphParams *g,
     
     if (Vars[alc] || ((all || CI(alc)) && alc0)) {
       if (p->ReduceT != 0 && alc == ATc && Vars[alc]) {
-	sprintf(lmlc, "%s(%s/#%c%g#0-1)",
-		func ? func : "", name, CI(alc) + '0', Vars[alc]);
+	snprintf(lmlc, sizeof(lmlc), "%s(%s/#%c%g#0-1)",
+		 func ? func : "", name, CI(alc) + '0', Vars[alc]);
       } else {
-	sprintf(lmlc, "%s(%s#%c%+g#0)",
-		func ? func : "", name, CI(alc) + '0', -Vars[alc]);
+	snprintf(lmlc, sizeof(lmlc), "%s(%s#%c%+g#0)",
+		 func ? func : "", name, CI(alc) + '0', -Vars[alc]);
       }
-      sprintf(text, "%s%s", times ? timesstr : "", lmlc);
+      snprintf(text, sizeof(text), "%s%s", times ? timesstr : "", lmlc);
       /*charstrP(text, 0, &g->cpos[CI(alc) ? ax : alc]);*/
     } else {
-      sprintf(lmlc, func ? "%s(%s)" : "%s%s", func ? func : "", name);
-      sprintf(text, "%s%s", times ? timesstr : "", lmlc);
+      snprintf(lmlc, sizeof(lmlc), func ? "%s(%s)" : "%s%s", func ? func : "", name);
+      snprintf(text, sizeof(text), "%s%s", times ? timesstr : "", lmlc);
       /*charstrP(text, 0, &g->cpos[CI(ax) ? alc : ax]);*/
     }
     charstrP(text, 0, &g->cpos[alc]);
     
-    g->Labi[xy] += sprintf(g->Lab[xy] + g->Labi[xy], "%s%s%s",
-			   times ? timesstr : "",
-			   func ? "\\" : "",
-			   lmlc);
+    g->Labi[xy] += snprintf(g->Lab[xy] + g->Labi[xy], sizeof(g->Lab[xy]) - g->Labi[xy],
+			    "%s%s%s",
+			    times ? timesstr : "",
+			    func ? "\\" : "",
+			    lmlc);
     
     /* ^(x + DY D) */
     switch(2 * (all || Vars[ax]||CI(ax) || CI(alc)) + (Vars[adx]||CI(adx))) {
     case 3: /* Both */
-      sprintf(text, "(#%c%g",
-	      CI(ax ) + '0', Vars[ax]);
+      snprintf(text, sizeof(text), "(#%c%g",
+	       CI(ax ) + '0', Vars[ax]);
       charstrP(text, g->FontH/2, &g->cpos[ax]);
-      sprintf(text, "#%c%+g#0 %s)",
-	      CI(adx) + '0', Vars[adx],
-	      g->Names[3]);
+      snprintf(text, sizeof(text), "#%c%+g#0 %s)",
+	       CI(adx) + '0', Vars[adx],
+	       g->Names[3]);
       charstrP(text, g->FontH/2, &g->cpos[adx]);
-      g->Labi[xy] += sprintf(g->Lab[xy] + g->Labi[xy],
-			     "\\S%g%+g %s\\N",
-			     Vars[ax], Vars[adx], g->Names[3]);
+      g->Labi[xy] += snprintf(g->Lab[xy] + g->Labi[xy], sizeof(g->Lab[xy]) - g->Labi[xy],
+			      "\\S%g%+g %s\\N",
+			      Vars[ax], Vars[adx], g->Names[3]);
       break;
     case 2: /* X */
       if (all || Vars[ax] != 1.0 || CI(ax)) {
 	if (g->ShowNuBeta) switch (ax) {
 	case AX:
-	  sprintf(text, "1/#%c%g#0",
-		  CI(AX) + '0', 1/p->X);
+	  snprintf(text, sizeof(text), "1/#%c%g#0",
+		   CI(AX) + '0', 1/p->X);
 	  break;
 	case AY:
-	  sprintf(text, "#%c%g#0/#%c%g#0",
-		  CI(AY) + '0', p->Y/p->X,
-		  CI(AX) + '0', 1/p->X);
+	  snprintf(text, sizeof(text), "#%c%g#0/#%c%g#0",
+		   CI(AY) + '0', p->Y/p->X,
+		   CI(AX) + '0', 1/p->X);
 	  break;
 	default:
-	  sprintf(text, "#%c%g#0", CI(ax) + '0', Vars[ax]);
+	  snprintf(text, sizeof(text), "#%c%g#0", CI(ax) + '0', Vars[ax]);
 	  break;
 	} else {
-	  sprintf(text, "#%c%g#0", CI(ax) + '0', Vars[ax]);
+	  snprintf(text, sizeof(text), "#%c%g#0", CI(ax) + '0', Vars[ax]);
 	}
 	charstrP(text, g->FontH/2, &g->cpos[ax]);
-	/*g->Labi[xy] += sprintf(g->Lab[xy] + g->Labi[xy], "\\S%g\\N", Vars[ax]);*/
-	g->Labi[xy] += sprintf(g->Lab[xy] + g->Labi[xy], "\\S%s\\N", text);
+	g->Labi[xy] += snprintf(g->Lab[xy] + g->Labi[xy], sizeof(g->Lab[xy]) - g->Labi[xy], "\\S%s\\N", text);
       }
       break;
     case 1: /* DX */
-      sprintf(text, "#%c%g#0 %s", CI(adx) + '0', Vars[adx], g->Names[3]);
+      snprintf(text, sizeof(text), "#%c%g#0 %s", CI(adx) + '0', Vars[adx], g->Names[3]);
       charstrP(text, g->FontH/2, &g->cpos[adx]);
-      g->Labi[xy] += sprintf(g->Lab[xy] + g->Labi[xy],
-			     "\\S%g %s\\N",
-			     Vars[adx], g->Names[3]);
+      g->Labi[xy] += snprintf(g->Lab[xy] + g->Labi[xy], sizeof(g->Lab[xy]) - g->Labi[xy],
+			      "\\S%g %s\\N",
+			      Vars[adx], g->Names[3]);
       break;
     }
   }
@@ -1227,15 +1229,15 @@ void DrawMain(const NumParams *p, GraphParams *g) {
   memset(g->cpos, 0, sizeof(g->cpos));
   
   if (g->Active) {
-    sprintf(text, "%d", g->Active);
-    cmov2(CX = g->XSize - FRAME - strwidth(text), CY = g->FontH + g->FontD);
+    snprintf(text, sizeof(text), "%d", g->Active);
+    cmov2(CX = g->XSize - (FRAME + strwidth(text)), CY = g->FontH + g->FontD);
     color(ACOLOR);
     charstrC(text);
   }
   
   if (p->Bewert) {
-    sprintf(text, "Vf = %g; V%d = %e", p->VarFactor, p->VarType, p->Error);
-    cmov2(CX = g->XSize - FRAME - strwidth(text), CY = g->FontD);
+    snprintf(text, sizeof(text), "Vf = %g; V%d = %.2e", p->VarFactor, p->VarType, p->Error);
+    cmov2(CX = g->XSize - (FRAME + 10 + strwidth(text)), CY = g->FontD);
     color(g->Colors[2]);
     charstrC(text);
   }
@@ -1245,12 +1247,12 @@ void DrawMain(const NumParams *p, GraphParams *g) {
   /* Line 1 */
   cmov2(CX = FRAME, CY = 6 * g->FontH + g->FontD);
   charstrC("d = ");
-  sprintf(text, "#%c%g#0", CI(Ad) + '0', p->d);
+  snprintf(text, sizeof(text), "#%c%g#0", CI(Ad) + '0', p->d);
   charstrP(text, 0, &g->cpos[Ad]);
   
   if (g->ShowZero || CI(AL0) || p->L0 != 1.0) {
-    sprintf(text, "; %s /= #%c%g#0%s", g->Names[0], CI(AL0) + '0', p->L0,
-	    p->L0_only_in_log ? " (only in logs)" : "");
+    snprintf(text, sizeof(text), "; %s /= #%c%g#0%s", g->Names[0], CI(AL0) + '0', p->L0,
+	     p->L0_only_in_log ? " (only in logs)" : "");
     charstrP(text, 0, &g->cpos[AL0]);
   }
 
@@ -1259,12 +1261,12 @@ void DrawMain(const NumParams *p, GraphParams *g) {
   /****** X-axis ******/
   xy = 0;
   if (g->ShowZero || CI(AXf) || p->Xf != 1.0) {
-    sprintf(text, "X/#%c%g#0 =", CI(AXf) + '0', p->Xf);
+    snprintf(text, sizeof(text), "X/#%c%g#0 =", CI(AXf) + '0', p->Xf);
     charstrP(text, 0, &g->cpos[AXf]);
-    g->Labi[0] = sprintf(g->Lab[0], "%g [", p->Xf);
+    g->Labi[0] = snprintf(g->Lab[0], sizeof(g->Lab[0]), "%g [", p->Xf);
   } else {
     charstrP("X = ", 0, &g->cpos[AXf]);
-    g->Labi[0] = sprintf(g->Lab[0], "");
+    g->Labi[0] = snprintf(g->Lab[0], sizeof(g->Lab[0]), "");
   }
   
   /* (T - Tc)^Z */
@@ -1280,9 +1282,9 @@ void DrawMain(const NumParams *p, GraphParams *g) {
   
   if (g->ShowZero || CI(ALxsf) || p->Lxsf) {
     /* + Lxsf */
-    sprintf(text, " #%c%+g#0", CI(ALxsf) + '0', p->Lxsf);
+    snprintf(text, sizeof(text), " #%c%+g#0", CI(ALxsf) + '0', p->Lxsf);
     charstrP(text, 0, &g->cpos[ALxsf]);
-    g->Labi[0] += sprintf(g->Lab[0] + g->Labi[0], "%+g", p->Lxsf);
+    g->Labi[0] += snprintf(g->Lab[0] + g->Labi[0], sizeof(g->Lab[0]) - g->Labi[0], "%+g", p->Lxsf);
     /* (T - Tc)^Zs */
     WriteTerm(p, g, NULL,  ATc, 0, AZs,  AOff, xy);
     /* (L - Lc)^(Xs + DXs * D) */
@@ -1291,7 +1293,7 @@ void DrawMain(const NumParams *p, GraphParams *g) {
     WriteTerm(p, g, "alog", ALc, 0, ALxs, AOff, xy);
   }
   if (g->ShowZero || CI(AXf) || p->Xf != 1.0) {
-    g->Labi[0] += sprintf(g->Lab[0] + g->Labi[0], "]");
+    g->Labi[0] += snprintf(g->Lab[0] + g->Labi[0], sizeof(g->Lab[0]) - g->Labi[0], "]");
   }
   
   /* Line 3 */
@@ -1299,12 +1301,12 @@ void DrawMain(const NumParams *p, GraphParams *g) {
   /****** Y-axis ******/
   xy = 1;
   if (g->ShowZero || CI(AYf) || p->Yf != 1.0) {
-    sprintf(text, "Y/#%c%g#0 =", CI(AYf) + '0', p->Yf);
+    snprintf(text, sizeof(text), "Y/#%c%g#0 =", CI(AYf) + '0', p->Yf);
     charstrP(text, 0, &g->cpos[AYf]);
-    g->Labi[1] = sprintf(g->Lab[1], "%g [", p->Yf);
+    g->Labi[1] = snprintf(g->Lab[1], sizeof(g->Lab[1]), "%g [", p->Yf);
   } else {
     charstrP("Y = ", 0, &g->cpos[AYf]);
-    g->Labi[1] = sprintf(g->Lab[1], "");
+    g->Labi[1] = snprintf(g->Lab[1], sizeof(g->Lab[1]), "");
   }
   
   /* (M - Mc)^(U + DU * D) */
@@ -1324,9 +1326,9 @@ void DrawMain(const NumParams *p, GraphParams *g) {
   
   if (g->ShowZero || CI(ALysf) || p->Lysf) {
     /* + Lysf */
-    sprintf(text, " #%c%+g#0", CI(ALysf) + '0', p->Lysf);
+    snprintf(text, sizeof(text), " #%c%+g#0", CI(ALysf) + '0', p->Lysf);
     charstrP(text, 0, &g->cpos[ALysf]);
-    g->Labi[1] += sprintf(g->Lab[1] + g->Labi[1], "%+g", p->Lysf);
+    g->Labi[1] += snprintf(g->Lab[1] + g->Labi[1], sizeof(g->Lab[1]) - g->Labi[1], "%+g", p->Lysf);
     /* (M - Mc)^Us */
     WriteTerm(p, g, NULL, AMc, 0, AUs,  AOff,  xy);
     /* (L - Lc)^(Ys + DYs * D) */
@@ -1339,24 +1341,24 @@ void DrawMain(const NumParams *p, GraphParams *g) {
     WriteTerm(p, g, "alog", ATc, 0, ALms, AOff, xy);
   }
   if (g->ShowZero || CI(AYf) || p->Yf != 1.0) {
-    g->Labi[1] += sprintf(g->Lab[1] + g->Labi[1], "]");
+    g->Labi[1] += snprintf(g->Lab[1] + g->Labi[1], sizeof(g->Lab[1]) - g->Labi[1], "]");
   }
   
   /* Line 4 */
   cmov2(CX = FRAME, CY = 1.5 * g->FontH + g->FontD);
   if (p->NumRows == 3)
-    sprintf(text, "%s =", g->Names[0]);
+    snprintf(text, sizeof(text), "%s =", g->Names[0]);
   else
-    sprintf(text, "%s/%s =", g->Names[0], g->Names[3]);
+    snprintf(text, sizeof(text), "%s/%s =", g->Names[0], g->Names[3]);
   charstrC(text);
   
   for (i = 0; i < p->S; i++) {
     Set_t *s = &p->Set[i];
     color(g->Colors[s->color]);
     if (p->NumRows == 3)
-      sprintf(text, s->active ? " %.4g" : " (%.4g)", s->L);
+      snprintf(text, sizeof(text), s->active ? " %.4g" : " (%.4g)", s->L);
     else
-      sprintf(text, s->active ? " %.4g/%.4g" : " (%.4g/%.4g)", s->L, s->D);
+      snprintf(text, sizeof(text), s->active ? " %.4g/%.4g" : " (%.4g/%.4g)", s->L, s->D);
     memset(&s->cpos, 0, sizeof(s->cpos));
     charstrP(text, 0, &s->cpos);
   }  
@@ -1486,9 +1488,9 @@ void DrawPlot(NumParams *p) {
     color(GRAY);
     DrawTickX(p, Gp, x, 0);
     if (!p->LogX/* == p->Ticks[0].l0*/) {
-      sprintf(text, "%g", x);
+      snprintf(text, sizeof(text), "%g", x);
     } else {
-      sprintf(text, "%.3g", exp10(x));
+      snprintf(text, sizeof(text), "%.3g", exp10(x));
     }
     /*fprintf(stderr, "%s (%g)\n", text, x);*/
     color(Gp->FgColor);
@@ -1511,9 +1513,9 @@ void DrawPlot(NumParams *p) {
     color(GRAY);
     DrawTickY(p, Gp, y, 0);
     if (p->LogY == p->Ticks[1].l0) {
-      sprintf(text, "%g", y);
+      snprintf(text, sizeof(text), "%g", y);
     } else {
-      sprintf(text, "%.3g", exp10(y));
+      snprintf(text, sizeof(text), "%.3g", exp10(y));
     }
     /*fprintf(stderr, "%s (%g)\n", text, y);*/
     color(Gp->FgColor);
@@ -1594,7 +1596,7 @@ void ShowPos(const NumParams *p, const GraphParams *g, Int16 mx, Int16 my, Int16
 	   x, y);
 #endif
     color(g->FgColor);
-    sprintf(text, "P = {%g, %g}", 
+    snprintf(text, sizeof(text), "P = {%g, %g}", 
 	    p->LogX ? exp10(x) : x,
 	    p->LogY ? exp10(y) : y);
     cmov2(FRAME, g->FontD);
@@ -1979,7 +1981,7 @@ void ProcessQueue(NumParams *p, GraphParams *g) {
     todo    = ReMa;
     rewrite = 1;
     break;
-  case INSERTKEY:
+  case DELKEY:
   case PAD5:
     if (p->AutoExp == g->Active) {
       p->AutoExp = AOff;
@@ -2378,8 +2380,8 @@ void write_dats(void) {
     char datfilename[256];
     FILE *tn;
     
-    sprintf(datfilename, "fsscale-%d-%s-%s-%s=%g.dat",
-	    getpid(), Gp->Names[1], Gp->Names[2], Gp->Names[0], s->L);
+    snprintf(datfilename, sizeof(datfilename), "fsscale-%d-%s-%s-%s=%g.dat",
+	     getpid(), Gp->Names[1], Gp->Names[2], Gp->Names[0], s->L);
     
     if ((tn = fopen(datfilename, "w")) == NULL) {
       perror(datfilename);
@@ -2477,8 +2479,8 @@ void write_gnuplot(void) {
   for (i = 0; i < p->S; i++) if (p->Set[i].active) {
     Set_t *s  = &p->Set[i];
     if (s->datfilename[0] == 0) {
-      sprintf(s->datfilename, "fsscale-%d-%s,%s,%s=%g.dat",
-	      getpid(), Gp->Names[1], Gp->Names[2], Gp->Names[0], s->L);
+      snprintf(s->datfilename, sizeof(s->datfilename), "fsscale-%d-%s,%s,%s=%g.dat",
+	       getpid(), Gp->Names[1], Gp->Names[2], Gp->Names[0], s->L);
     }
     if ((s->datfile = fopen(s->datfilename, "w")) == NULL) {
       perror(s->datfilename);
@@ -2553,12 +2555,12 @@ int main(int argc, char *argv[]) {
   
   GetArgs(&P, &G, argc, argv);
   
-  sprintf(G.GPName,   "fsscale-%d-%s-%s-%s-%s.gp", 
-	  getpid(), G.Title, G.Names[0], G.Names[1], G.Names[2]);
-  sprintf(G.XmgrName, "fsscale-%d-%s-%s-%s-%s.agr", 
-	  getpid(), G.Title, G.Names[0], G.Names[1], G.Names[2]);
-  sprintf(G.DatName,  "fsscale-%d-%s-%s-%s-%s.dat", 
-	  getpid(), G.Title, G.Names[0], G.Names[1], G.Names[2]);
+  snprintf(G.GPName, sizeof(G.GPName),     "fsscale-%d-%s-%s-%s-%s.gp", 
+	   getpid(), G.Title, G.Names[0], G.Names[1], G.Names[2]);
+  snprintf(G.XmgrName, sizeof(G.XmgrName), "fsscale-%d-%s-%s-%s-%s.agr", 
+	   getpid(), G.Title, G.Names[0], G.Names[1], G.Names[2]);
+  snprintf(G.DatName, sizeof(G.DatName),   "fsscale-%d-%s-%s-%s-%s.dat", 
+	   getpid(), G.Title, G.Names[0], G.Names[1], G.Names[2]);
   
   ReadData(&P);
 #if 1
@@ -2584,9 +2586,6 @@ int main(int argc, char *argv[]) {
  * $Log: fsscale.c,v $
  * Revision 2.85  2025/08/06 19:39:42  fred
  * Summary: ALu aka. alog(m)^Lu, finite() -> isfinite()
- *
- * Revision 2.85  2025-08-06 17:00:00+02  fred (log by hand)
- * added ALu aka. alog(m)^Lu, finite() -> isfinite()
  *
  * Revision 2.84  2009-11-23 08:23:12+01  fred
  * Fixed NuBeta handling in ChangeActive()
